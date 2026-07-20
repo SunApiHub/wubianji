@@ -1,0 +1,443 @@
+/* === 无边记 — 样式表 === */
+
+/* CSS 变量 — 亮色主题（默认） */
+:root {
+  --bg: #f0f0f0;
+  --surface: rgba(255, 255, 255, 0.85);
+  --surface-hover: rgba(255, 255, 255, 0.95);
+  --text: #1d1d1f;
+  --text-secondary: #86868b;
+  --border: rgba(0, 0, 0, 0.08);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
+  --active: #007aff;
+  --active-bg: rgba(0, 122, 255, 0.1);
+  --danger: #ff3b30;
+  --danger-bg: rgba(255, 59, 48, 0.1);
+  --toolbar-h: 48px;
+  --statusbar-h: 28px;
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+/* 手动暗色主题 */
+:root[data-theme="dark"] {
+  --bg: #1c1c1e;
+  --surface: rgba(44, 44, 46, 0.85);
+  --surface-hover: rgba(58, 58, 60, 0.95);
+  --text: #f5f5f7;
+  --text-secondary: #98989d;
+  --border: rgba(255, 255, 255, 0.1);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --active-bg: rgba(10, 132, 255, 0.2);
+  --danger-bg: rgba(255, 69, 58, 0.2);
+}
+
+/* 手动亮色主题（确保覆盖系统暗色） */
+:root[data-theme="light"] {
+  --bg: #f0f0f0;
+  --surface: rgba(255, 255, 255, 0.85);
+  --surface-hover: rgba(255, 255, 255, 0.95);
+  --text: #1d1d1f;
+  --text-secondary: #86868b;
+  --border: rgba(0, 0, 0, 0.08);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.12);
+  --active: #007aff;
+  --active-bg: rgba(0, 122, 255, 0.1);
+  --danger: #ff3b30;
+  --danger-bg: rgba(255, 59, 48, 0.1);
+}
+
+/* 跟随系统暗色主题（仅在无手动设置时生效） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #1c1c1e;
+    --surface: rgba(44, 44, 46, 0.85);
+    --surface-hover: rgba(58, 58, 60, 0.95);
+    --text: #f5f5f7;
+    --text-secondary: #98989d;
+    --border: rgba(255, 255, 255, 0.1);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+    --active-bg: rgba(10, 132, 255, 0.2);
+    --danger-bg: rgba(255, 69, 58, 0.2);
+  }
+}
+
+/* === 基础重置 === */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+/* === 主画布 === */
+#main-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  cursor: default;
+  z-index: 1;
+}
+
+/* === 工具栏 === */
+#toolbar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: var(--surface);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: calc(100vw - 24px);
+}
+
+.tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tool-sep {
+  width: 1px;
+  height: 24px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* === 工具按钮 === */
+.tool-btn {
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.tool-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tool-btn:hover {
+  background: var(--active-bg);
+  color: var(--text);
+}
+
+.tool-btn.active {
+  background: var(--active);
+  color: #fff;
+}
+
+.tool-btn:active {
+  transform: scale(0.92);
+}
+
+.tool-btn.danger:hover {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.tool-btn:disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* === 样式控件 === */
+.style-btn {
+  width: 30px;
+  height: 30px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.style-btn:hover {
+  border-color: var(--text-secondary);
+}
+
+.color-picker-wrapper {
+  position: relative;
+  display: flex;
+}
+
+.color-picker-wrapper input[type="color"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+/* 预设颜色 */
+.preset-colors {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.preset-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+
+.preset-color:hover {
+  transform: scale(1.25);
+  border-color: var(--text-secondary);
+}
+
+.preset-color.active {
+  border-color: var(--active);
+  box-shadow: 0 0 0 1px var(--active);
+}
+
+/* 滑块 */
+.slider-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.style-slider {
+  width: 60px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+
+.style-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--active);
+  cursor: pointer;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+#stroke-width-val {
+  min-width: 18px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* === 状态栏 === */
+#statusbar {
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px;
+  background: var(--surface);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+}
+
+#status-sep, #status-sep2 {
+  opacity: 0.5;
+}
+
+/* === 文本编辑浮层 === */
+#text-editor {
+  position: fixed;
+  z-index: 200;
+  border: 2px solid var(--active);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--surface);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  min-width: 200px;
+  min-height: 30px;
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.15), var(--shadow-lg);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  caret-color: var(--active);
+}
+
+#text-editor::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+/* 编辑器聚焦时更明显的边框 */
+#text-editor:focus {
+  border-color: var(--active);
+  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.25), var(--shadow-lg);
+}
+
+/* === 右键菜单 === */
+#context-menu {
+  position: fixed;
+  z-index: 300;
+  min-width: 150px;
+  padding: 6px;
+  background: var(--surface);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+.ctx-item {
+  padding: 7px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  transition: background 0.1s;
+  white-space: nowrap;
+}
+
+.ctx-item:hover {
+  background: var(--active);
+  color: #fff;
+}
+
+.ctx-danger:hover {
+  background: var(--danger);
+}
+
+.ctx-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 8px;
+}
+
+/* === 响应式 === */
+@media (max-width: 768px) {
+  #toolbar {
+    top: auto;
+    bottom: 12px;
+    padding: 6px 8px;
+    gap: 1px;
+    border-radius: 14px;
+  }
+
+  #statusbar {
+    bottom: 70px;
+  }
+
+  .tool-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .tool-btn svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .tool-sep {
+    margin: 0 2px;
+    height: 18px;
+  }
+
+  .style-slider {
+    width: 40px;
+  }
+
+  .preset-color {
+    width: 17px;
+    height: 17px;
+  }
+}
+
+@media (max-width: 480px) {
+  #toolbar {
+    padding: 4px 6px;
+    gap: 0;
+    border-radius: 10px;
+  }
+
+  .tool-btn {
+    width: 26px;
+    height: 26px;
+  }
+
+  .tool-btn svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .style-slider {
+    width: 30px;
+  }
+}
