@@ -240,6 +240,38 @@ html, body {
   box-shadow: 0 0 0 1px var(--active);
 }
 
+/* 颜色+透明组合 */
+.color-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.alpha-slider {
+  width: 30px;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, transparent, currentColor);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.alpha-slider:hover { opacity: 1; }
+.alpha-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--active);
+  cursor: pointer;
+  border: 1.5px solid #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
 /* 滑块 */
 .slider-label {
   display: flex;
@@ -305,6 +337,73 @@ html, body {
 #status-sep, #status-sep2 {
   opacity: 0.5;
 }
+
+/* === 尺寸面板 === */
+#size-panel {
+  position: fixed;
+  bottom: 10px;
+  right: 16px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: var(--surface);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+}
+
+.size-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.size-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  width: 12px;
+  text-align: center;
+}
+
+.size-input {
+  width: 56px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  text-align: center;
+  outline: none;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  -moz-appearance: textfield;
+}
+.size-input::-webkit-inner-spin-button,
+.size-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.size-input:focus { border-color: var(--active); }
+
+.size-lock-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.size-lock-btn:hover { border-color: var(--text-secondary); }
+.size-lock-btn.active { background: var(--active); border-color: var(--active); }
 
 /* === 文本编辑浮层 === */
 #text-editor {

@@ -14,6 +14,13 @@ const Renderer = {
   // 预览相关
   preview: null,            // 当前工具预览 { type, x, y, width, height, ... }
 
+  // 对齐参考线
+  guides: [],               // [{ type: 'h'|'v', pos: worldCoord }]
+  GUIDE_COLOR: '#ff3b30',   // 红色参考线
+
+  // 图片缓存
+  _imageCache: {},
+
   /** 颜色: 选中框 */
   SELECT_COLOR: '#007aff',
   /** 颜色: 悬停高亮 */
@@ -98,6 +105,11 @@ const Renderer = {
       this._drawSelectionBox(ctx);
     }
 
+    // 5.5 绘制对齐参考线
+    if (this.guides.length > 0) {
+      this._drawGuides(ctx);
+    }
+
     // 6. 绘制悬停高亮（橡皮擦模式）
     if (this.hoveredId) {
       const el = Elements.get(this.hoveredId);
@@ -180,6 +192,12 @@ const Renderer = {
       case 'text': this._drawText(ctx, el); break;
       case 'sticky-note': this._drawStickyNote(ctx, el); break;
       case 'path': this._drawPath(ctx, el); break;
+      case 'image': this._drawImage(ctx, el); break;
+    }
+
+    // 锁定标识
+    if (el.locked) {
+      this._drawLockBadge(ctx, el);
     }
 
     ctx.restore();
@@ -246,17 +264,22 @@ const Renderer = {
     const { x, y, endX, endY, strokeColor, strokeWidth } = el;
     if (endX === undefined || endY === undefined) return;
 
+    const angle = Math.atan2(endY - y, endX - x);
+    const arrowSize = Math.max(12, strokeWidth * 4);
+
+    // 线段缩短到箭头内部，避免线头露出
+    const lineEndX = endX - arrowSize * 0.5 * Math.cos(angle);
+    const lineEndY = endY - arrowSize * 0.5 * Math.sin(angle);
+
     ctx.strokeStyle = strokeColor;
     ctx.lineWidth = strokeWidth;
-    ctx.lineCap = 'round';
+    ctx.lineCap = 'butt';
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.lineTo(endX, endY);
+    ctx.lineTo(lineEndX, lineEndY);
     ctx.stroke();
 
     // 箭头三角形
-    const angle = Math.atan2(endY - y, endX - x);
-    const arrowSize = Math.max(12, strokeWidth * 4);
     ctx.fillStyle = strokeColor;
     ctx.beginPath();
     ctx.moveTo(endX, endY);
@@ -273,7 +296,7 @@ const Renderer = {
   },
 
   _drawText(ctx, el) {
-    const { x, y, text, fontSize, fontFamily, fillColor, textAlign } = el;
+    const { x, y, text, fontSize, fontFamily, fillColor, textAlign, width } = el;
     if (!fillColor || fillColor === 'transparent') return;
 
     ctx.font = `${fontSize}px ${fontFamily}`;
@@ -281,15 +304,46 @@ const Renderer = {
     ctx.textBaseline = 'top';
     ctx.fillStyle = fillColor;
 
-    const lines = (text || '').split('\n');
+    let drawX = x;
+    if (textAlign === 'center') drawX = x + (width || 200) / 2;
+    else if (textAlign === 'right') drawX = x + (width || 200);
+
+    const maxWidth = Math.max(width || 200, 20);
+    const lines = this._wrapLines(ctx, text || '', maxWidth);
     const lineHeight = fontSize * 1.4;
     for (let i = 0; i < lines.length; i++) {
-      ctx.fillText(lines[i], x, y + i * lineHeight);
+      ctx.fillText(lines[i], drawX, y + i * lineHeight);
     }
   },
 
+  /** 按宽度换行 */
+  _wrapLines(ctx, text, maxWidth) {
+    const result = [];
+    const paragraphs = text.split('\n');
+    for (const para of paragraphs) {
+      if (para === '') {
+        result.push('');
+        continue;
+      }
+      // 逐词换行
+      const words = para.split('');
+      let line = '';
+      for (let i = 0; i < words.length; i++) {
+        const testLine = line + words[i];
+        if (ctx.measureText(testLine).width > maxWidth && line.length > 0) {
+          result.push(line);
+          line = words[i];
+        } else {
+          line = testLine;
+        }
+      }
+      if (line) result.push(line);
+    }
+    return result;
+  },
+
   _drawStickyNote(ctx, el) {
-    const { x, y, width, height, fillColor, text, fontSize, fontFamily } = el;
+    const { x, y, width, height, fillColor, text, fontSize, fontFamily, textAlign } = el;
 
     // 阴影
     ctx.save();
@@ -298,18 +352,13 @@ const Renderer = {
     ctx.shadowOffsetX = 3;
     ctx.shadowOffsetY = 3;
 
-    // 稍微倾斜的外观
-    const skew = 1.5;
-    ctx.transform(1, 0, Math.tan(skew * Math.PI / 180), 1, 0, 0);
-
-    // 背景
     ctx.fillStyle = fillColor || '#fff9c4';
     ctx.beginPath();
     this._roundRect(ctx, x, y, width, height, 4);
     ctx.fill();
     ctx.restore();
 
-    // 右上角折角效果（小三角形）
+    // 右上角折角
     const foldSize = 14;
     ctx.fillStyle = 'rgba(0,0,0,0.08)';
     ctx.beginPath();
@@ -321,15 +370,25 @@ const Renderer = {
 
     // 文本
     if (text) {
-      ctx.fillStyle = '#333';
-      ctx.font = `${fontSize || 16}px ${fontFamily || '-apple-system, BlinkMacSystemFont, sans-serif'}`;
-      ctx.textAlign = 'left';
+      const fz = fontSize || 16;
+      const ff = fontFamily || '-apple-system, BlinkMacSystemFont, sans-serif';
+      const align = textAlign || 'left';
+      ctx.font = `${fz}px ${ff}`;
+      ctx.textAlign = align;
       ctx.textBaseline = 'top';
-      const lines = text.split('\n');
-      const lineHeight = (fontSize || 16) * 1.4;
-      lines.forEach((line, i) => {
-        ctx.fillText(line, x + 10, y + 10 + i * lineHeight);
-      });
+      ctx.fillStyle = '#333';
+
+      const padX = 10;
+      let baseX = x + padX;
+      if (align === 'center') baseX = x + width / 2;
+      else if (align === 'right') baseX = x + width - padX;
+
+      const maxWidth = Math.max(width - padX * 2, 20);
+      const lines = this._wrapLines(ctx, text, maxWidth);
+      const lineHeight = fz * 1.4;
+      for (let i = 0; i < lines.length; i++) {
+        ctx.fillText(lines[i], baseX, y + padX + i * lineHeight);
+      }
     }
   },
 
@@ -360,6 +419,31 @@ const Renderer = {
     }
 
     ctx.stroke();
+  },
+
+  _drawImage(ctx, el) {
+    const { x, y, width, height, src } = el;
+    if (!src) return;
+
+    if (!this._imageCache[src]) {
+      const img = new Image();
+      img.src = src;
+      this._imageCache[src] = img;
+    }
+
+    const img = this._imageCache[src];
+    if (img.complete && img.naturalWidth > 0) {
+      ctx.drawImage(img, x, y, width, height);
+    } else {
+      ctx.fillStyle = 'rgba(0,0,0,0.05)';
+      ctx.fillRect(x, y, width, height);
+      ctx.strokeStyle = '#ccc';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(x, y, width, height);
+      ctx.setLineDash([]);
+      img.onload = () => Renderer.markDirty();
+    }
   },
 
   /* ========================================================
@@ -503,6 +587,58 @@ const Renderer = {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
     ctx.fillText('编组', b.x + b.width / 2, labelY);
+  },
+
+  /** 绘制对齐参考线 */
+  _drawGuides(ctx) {
+    ctx.save();
+    ctx.strokeStyle = this.GUIDE_COLOR;
+    ctx.lineWidth = 1 / Camera.zoom;
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.8;
+
+    for (const g of this.guides) {
+      ctx.beginPath();
+      if (g.type === 'h') {
+        ctx.moveTo(g.startX, g.pos);
+        ctx.lineTo(g.endX, g.pos);
+      } else {
+        ctx.moveTo(g.pos, g.startY);
+        ctx.lineTo(g.pos, g.endY);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  },
+
+  /** 绘制锁定标识 */
+  _drawLockBadge(ctx, el) {
+    const b = Elements.getBounds(el);
+    const size = Math.max(12, 14 / Camera.zoom);
+    const x = b.minX + 3 / Camera.zoom;
+    const y = b.minY + 3 / Camera.zoom;
+
+    // 半透明背景圆
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, size / 2 + 2 / Camera.zoom, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 锁图标 (简化绘制)
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5 / Camera.zoom;
+    ctx.fillStyle = '#fff';
+
+    const cx = x + size / 2;
+    const cy = y + size / 2;
+    const s = size * 0.3;
+
+    // 锁身（矩形）
+    ctx.fillRect(cx - s, cy, s * 2, s * 1.6);
+    // 锁梁（拱形）
+    ctx.beginPath();
+    ctx.arc(cx, cy, s, Math.PI, 0);
+    ctx.stroke();
   },
 
   /* ========================================================

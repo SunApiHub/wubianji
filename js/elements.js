@@ -46,7 +46,7 @@ const Elements = {
 
     const el = { ...base, ...props };
     el.id = base.id; // 保持 ID
-    this.list.push(el);
+    // 不在此处 push，由 AddElementCommand/AddElementsCommand 负责添加到列表
     return el;
   },
 

@@ -88,6 +88,24 @@ AddElementCommand.prototype.undo = function() {
 };
 
 /**
+ * 创建「批量添加元素」命令
+ */
+function AddElementsCommand(elements) {
+  this.elements = elements;
+}
+AddElementsCommand.prototype.execute = function() {
+  for (const el of this.elements) {
+    Elements.list.push(el);
+  }
+};
+AddElementsCommand.prototype.undo = function() {
+  for (const el of this.elements) {
+    const idx = Elements.list.findIndex(e => e.id === el.id);
+    if (idx !== -1) Elements.list.splice(idx, 1);
+  }
+};
+
+/**
  * 创建「删除元素」命令
  */
 function DeleteElementCommand(el, index) {

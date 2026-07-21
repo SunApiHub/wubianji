@@ -19,6 +19,8 @@ const UI = {
     this._initPresetColors();
     this._initStrokeWidth();
     this._initFontSize();
+    this._initAlphaSliders();
+    this._initTextAlign();
     this._initUndoRedo();
     this._initExport();
     this._initSaveLoad();
@@ -95,12 +97,10 @@ const UI = {
       appState.fillColor = color;
       fillSwatch.setAttribute('fill', color);
       this._updatePresetActive('fill', color);
-      // 实时预览（不记录历史）
       this._applyStyleToSelected({ fillColor: color }, { recordHistory: false });
     });
     fillInput.addEventListener('change', () => {
-      // 颜色选择完成，记录历史
-      this._applyStyleToSelected({ fillColor: fillInput.value }, { recordHistory: true });
+      this._applyColorWithAlpha('fill');
     });
 
     strokeInput.addEventListener('input', () => {
@@ -108,14 +108,11 @@ const UI = {
       appState.strokeColor = color;
       strokeSwatch.setAttribute('stroke', color);
       this._updatePresetActive('stroke', color);
-      // 实时预览
       this._applyStyleToSelected({ strokeColor: color }, { recordHistory: false });
       this._applyTextColorToSelected(color, { recordHistory: false });
     });
     strokeInput.addEventListener('change', () => {
-      // 颜色选择完成，记录历史
-      this._applyStyleToSelected({ strokeColor: strokeInput.value }, { recordHistory: true });
-      this._applyTextColorToSelected(strokeInput.value, { recordHistory: true });
+      this._applyColorWithAlpha('stroke');
     });
 
     // 初始颜色
@@ -186,9 +183,7 @@ const UI = {
         document.getElementById('input-stroke-color').value = color;
         document.getElementById('stroke-color-swatch').setAttribute('stroke', color);
         this._updatePresetActive('stroke', color);
-        // 应用到选中元素
-        this._applyStyleToSelected({ strokeColor: color });
-        this._applyTextColorToSelected(color);
+        this._applyColorWithAlpha('stroke');
       });
 
       dot.addEventListener('dblclick', () => {
@@ -196,8 +191,7 @@ const UI = {
         document.getElementById('input-fill-color').value = color;
         document.getElementById('fill-color-swatch').setAttribute('fill', color);
         this._updatePresetActive('fill', color);
-        // 应用到选中元素（不含文本）
-        this._applyStyleToSelected({ fillColor: color });
+        this._applyColorWithAlpha('fill');
       });
 
       dot.addEventListener('dblclick', () => {
@@ -227,17 +221,36 @@ const UI = {
   _initStrokeWidth() {
     const slider = document.getElementById('input-stroke-width');
     const valDisplay = document.getElementById('stroke-width-val');
+    let origValues = null;
+
+    slider.addEventListener('pointerdown', () => {
+      origValues = {};
+      for (const id of Renderer.selectedIds) {
+        const el = Elements.get(id);
+        if (el) origValues[id] = el.strokeWidth;
+      }
+    });
 
     slider.addEventListener('input', () => {
       appState.strokeWidth = parseInt(slider.value);
       valDisplay.textContent = slider.value;
-      // 实时预览（不记录历史）
       this._applyStyleToSelected({ strokeWidth: appState.strokeWidth }, { recordHistory: false });
     });
 
     slider.addEventListener('change', () => {
-      // 拖动结束，记录历史
-      this._applyStyleToSelected({ strokeWidth: appState.strokeWidth }, { recordHistory: true });
+      const val = parseInt(slider.value);
+      if (origValues) {
+        const commands = [];
+        for (const id of Renderer.selectedIds) {
+          const el = Elements.get(id);
+          if (!el || origValues[id] === undefined) continue;
+          if (origValues[id] !== val) {
+            commands.push(new UpdateStyleCommand(el, { strokeWidth: origValues[id] }, { strokeWidth: val }));
+          }
+        }
+        if (commands.length > 0) History.execute(new BatchCommand(commands));
+        origValues = null;
+      }
     });
 
     slider.value = appState.strokeWidth;
@@ -248,21 +261,119 @@ const UI = {
   _initFontSize() {
     const slider = document.getElementById('input-font-size');
     const valDisplay = document.getElementById('font-size-val');
+    let origValues = null;
+
+    slider.addEventListener('pointerdown', () => {
+      origValues = {};
+      for (const id of Renderer.selectedIds) {
+        const el = Elements.get(id);
+        if (el) origValues[id] = el.fontSize;
+      }
+    });
 
     slider.addEventListener('input', () => {
       appState.fontSize = parseInt(slider.value);
       valDisplay.textContent = slider.value;
-      // 实时预览（不记录历史）
       this._applyFontSizeToSelected(appState.fontSize, { recordHistory: false });
     });
 
     slider.addEventListener('change', () => {
-      // 拖动结束，记录历史
-      this._applyFontSizeToSelected(appState.fontSize, { recordHistory: true });
+      const val = parseInt(slider.value);
+      if (origValues) {
+        const commands = [];
+        for (const id of Renderer.selectedIds) {
+          const el = Elements.get(id);
+          if (!el || origValues[id] === undefined) continue;
+          if (el.type !== 'text' && el.type !== 'sticky-note') continue;
+          if (origValues[id] !== val) {
+            el.fontSize = val;
+            commands.push(new UpdateStyleCommand(el, { fontSize: origValues[id] }, { fontSize: val }));
+          }
+        }
+        if (commands.length > 0) History.execute(new BatchCommand(commands));
+        origValues = null;
+      }
     });
 
     slider.value = appState.fontSize;
     valDisplay.textContent = appState.fontSize;
+  },
+
+  /* ---------- 透明度（填充/线条独立） ---------- */
+  _initAlphaSliders() {
+    const fillAlpha = document.getElementById('input-fill-alpha');
+    const strokeAlpha = document.getElementById('input-stroke-alpha');
+    if (!fillAlpha || !strokeAlpha) return;
+
+    fillAlpha.addEventListener('input', () => {
+      appState.fillAlpha = parseInt(fillAlpha.value) / 100;
+      this._applyColorWithAlpha('fill');
+    });
+    strokeAlpha.addEventListener('input', () => {
+      appState.strokeAlpha = parseInt(strokeAlpha.value) / 100;
+      this._applyColorWithAlpha('stroke');
+    });
+
+    fillAlpha.value = (appState.fillAlpha || 1) * 100;
+    strokeAlpha.value = (appState.strokeAlpha || 1) * 100;
+  },
+
+  /** 用 hex + alpha 合成 rgba 并应用到选中元素 */
+  _applyColorWithAlpha(type) {
+    const hex = type === 'fill' ? appState.fillColor : appState.strokeColor;
+    const alpha = type === 'fill' ? (appState.fillAlpha ?? 1) : (appState.strokeAlpha ?? 1);
+    const rgba = this._hexToRgba(hex, alpha);
+
+    if (type === 'fill') {
+      this._applyStyleToSelected({ fillColor: rgba }, { recordHistory: true });
+    } else {
+      this._applyStyleToSelected({ strokeColor: rgba }, { recordHistory: true });
+      this._applyTextColorToSelected(rgba, { recordHistory: true });
+    }
+  },
+
+  _hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  },
+
+  /* ---------- 文字对齐 ---------- */
+  _initTextAlign() {
+    const buttons = document.querySelectorAll('.text-align-btn');
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const align = btn.dataset.align;
+        appState.textAlign = align;
+        this._updateAlignActive(align);
+        this._applyAlignToSelected(align);
+      });
+    });
+    this._updateAlignActive(appState.textAlign);
+  },
+
+  _updateAlignActive(align) {
+    document.querySelectorAll('.text-align-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.align === align);
+    });
+  },
+
+  _applyAlignToSelected(align) {
+    const commands = [];
+    for (const id of Renderer.selectedIds) {
+      const el = Elements.get(id);
+      if (!el) continue;
+      if (el.type !== 'text' && el.type !== 'sticky-note') continue;
+      const oldStyle = { textAlign: el.textAlign || 'left' };
+      if (oldStyle.textAlign === align) continue;
+      el.textAlign = align;
+      commands.push(new UpdateStyleCommand(el, oldStyle, { textAlign: align }));
+    }
+    if (commands.length > 0) {
+      History.execute(new BatchCommand(commands));
+    }
+    Renderer.markDirty();
   },
 
   /** 将字号应用到选中文本元素 */
@@ -364,7 +475,7 @@ const UI = {
         const keyMap = {
           'v': 'select', 'h': 'hand', 'p': 'pen',
           'r': 'rectangle', 'o': 'ellipse', 'l': 'line',
-          'a': 'arrow', 't': 'text', 'n': 'sticky-note', 'e': 'eraser'
+          'a': 'arrow', 't': 'text', 'n': 'sticky-note', 'e': 'eraser', 'i': 'image'
         };
         if (keyMap[e.key.toLowerCase()] && !e.target.closest('input, textarea')) {
           const tool = keyMap[e.key.toLowerCase()];
@@ -404,9 +515,21 @@ const UI = {
         e.preventDefault();
       }
 
+      // 复制 Ctrl+C
+      if (ctrl && e.key === 'c') {
+        copySelected();
+        e.preventDefault();
+      }
+
+      // 粘贴 Ctrl+V
+      if (ctrl && e.key === 'v') {
+        pasteClipboard();
+        e.preventDefault();
+      }
+
       // 全选
       if (ctrl && e.key === 'a') {
-        Renderer.selectedIds = Elements.list.map(el => el.id);
+        Renderer.selectedIds = Elements.list.filter(el => !el.locked).map(el => el.id);
         Renderer.markDirty();
         e.preventDefault();
       }
@@ -479,5 +602,6 @@ const UI = {
     document.getElementById('status-count').textContent = count + ' 个元素';
 
     this._updateUndoRedoButtons();
+    if (typeof refreshSizePanel === 'function') refreshSizePanel();
   }
 };

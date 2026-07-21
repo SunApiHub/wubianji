@@ -4,9 +4,15 @@
 const appState = {
   fillColor: '#ffffff',
   strokeColor: '#000000',
+  fillAlpha: 1,
+  strokeAlpha: 1,
   strokeWidth: 2,
   fontSize: 20,
+  textAlign: 'left',
 };
+
+/** 剪贴板 */
+let _clipboard = [];
 
 /** 当历史状态改变时的回调 */
 function onHistoryChange() {
@@ -156,10 +162,16 @@ const SaveManager = {
   // 5. 初始化 UI
   UI.init();
 
-  // 6. 绑定事件
+  // 6. 初始化尺寸面板
+  initSizePanel();
+
+  // 7. 绑定事件
   bindCanvasEvents();
 
-  // 7. 启动渲染循环
+  // 8. 图片插入
+  initImageInsert();
+
+  // 9. 启动渲染循环
   Renderer.startLoop();
 
   console.log('无边记已就绪 🎨');
@@ -395,6 +407,161 @@ document.addEventListener('keyup', (e) => {
 });
 
 /* ================================================================
+ *  复制 / 粘贴 / 锁定
+ * ================================================================ */
+
+/** 复制选中元素到剪贴板 */
+function copySelected() {
+  if (Renderer.selectedIds.length === 0) return;
+  _clipboard = Renderer.selectedIds
+    .map(id => Elements.get(id))
+    .filter(Boolean)
+    .map(el => {
+      // 深拷贝元素数据（不含 id）
+      const copy = { ...el };
+      delete copy.id;
+      return copy;
+    });
+  console.log('📋 已复制 ' + _clipboard.length + ' 个元素');
+}
+
+/** 粘贴剪贴板中的元素 */
+function pasteClipboard() {
+  if (_clipboard.length === 0) return;
+  const offset = 30;
+  const newElements = [];
+  for (const data of _clipboard) {
+    const el = Elements.create(data.type, {
+      ...data,
+      x: data.x + offset,
+      y: data.y + offset,
+      groupId: null,
+    });
+    newElements.push(el);
+  }
+  History.execute(new AddElementsCommand(newElements));
+  Renderer.selectedIds = newElements.map(el => el.id);
+  Renderer.markDirty();
+  UI.updateStatus();
+  console.log('📋 已粘贴 ' + newElements.length + ' 个元素');
+}
+
+/** 锁定选中元素 */
+function lockSelected() {
+  const commands = [];
+  for (const id of Renderer.selectedIds) {
+    const el = Elements.get(id);
+    if (!el || el.locked) continue;
+    el.locked = true;
+    commands.push(new UpdateStyleCommand(el, { locked: false }, { locked: true }));
+  }
+  if (commands.length > 0) History.execute(new BatchCommand(commands));
+  Renderer.markDirty();
+}
+
+/** 解锁选中元素 */
+function unlockSelected() {
+  const commands = [];
+  for (const id of Renderer.selectedIds) {
+    const el = Elements.get(id);
+    if (!el || !el.locked) continue;
+    el.locked = false;
+    commands.push(new UpdateStyleCommand(el, { locked: true }, { locked: false }));
+  }
+  if (commands.length > 0) History.execute(new BatchCommand(commands));
+  Renderer.markDirty();
+}
+
+/** 切换锁定状态 */
+function toggleLock() {
+  const anyLocked = Renderer.selectedIds.some(id => {
+    const el = Elements.get(id);
+    return el && el.locked;
+  });
+  if (anyLocked) unlockSelected(); else lockSelected();
+}
+
+/** 为形状自动添加居中文字 */
+function startShapeText(shapeEl) {
+  const cx = shapeEl.x + shapeEl.width / 2;
+  const cy = shapeEl.y + shapeEl.height / 2;
+  const textEl = Elements.create('text', {
+    x: cx - 50, y: cy - 12,
+    width: 100, height: 24,
+    text: '',
+    fontSize: Math.min(20, Math.max(12, shapeEl.height / 6)),
+    fillColor: shapeEl.strokeColor || '#000000',
+    strokeColor: 'transparent',
+    strokeWidth: 0,
+    textAlign: 'center',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif'
+  });
+  // 编组（不手动 push，由 AddElementCommand 负责）
+  const groupId = 'grp_' + Date.now().toString(36);
+  shapeEl.groupId = groupId;
+  textEl.groupId = groupId;
+  History.execute(new BatchCommand([
+    new AddElementCommand(textEl),
+    new GroupCommand([shapeEl.id, textEl.id], groupId)
+  ]));
+  Renderer.selectedIds = [shapeEl.id, textEl.id];
+  Renderer.markDirty();
+  Tools.switchTo('text');
+  Tools._tools['text'].startEditing(textEl);
+}
+
+/** 图片插入功能 */
+function initImageInsert() {
+  const input = document.getElementById('input-image-file');
+  if (!input) return;
+
+  input.addEventListener('change', () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        // 压缩：限制最大 1200px，JPEG quality 0.85
+        let w = img.width, h = img.height;
+        const maxSize = 1200;
+        if (w > maxSize || h > maxSize) {
+          const ratio = Math.min(maxSize / w, maxSize / h);
+          w = Math.round(w * ratio);
+          h = Math.round(h * ratio);
+        }
+
+        const compressCanvas = document.createElement('canvas');
+        compressCanvas.width = w;
+        compressCanvas.height = h;
+        const cctx = compressCanvas.getContext('2d');
+        cctx.drawImage(img, 0, 0, w, h);
+        const compressedDataUrl = compressCanvas.toDataURL('image/jpeg', 0.85);
+
+        // 在画布中央创建
+        const center = Camera.screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
+        const el = Elements.create('image', {
+          x: center.x - w / 2, y: center.y - h / 2,
+          width: w, height: h,
+          src: compressedDataUrl,
+          fillColor: 'transparent',
+          strokeColor: 'transparent',
+          strokeWidth: 0,
+        });
+        History.execute(new AddElementCommand(el));
+        Renderer.selectedIds = [el.id];
+        Renderer.markDirty();
+        UI.updateStatus();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+    input.value = '';
+  });
+}
+
+/* ================================================================
  *  右键菜单
  * ================================================================ */
 let _ctxTargetId = null;
@@ -418,6 +585,12 @@ function showContextMenu(mx, my) {
   if (!Renderer.selectedIds.includes(hit.id)) {
     Renderer.selectedIds = [hit.id];
     Renderer.markDirty();
+  }
+
+  // 动态更新锁定菜单项文字
+  const lockItem = menu.querySelector('[data-action="lock"]');
+  if (lockItem) {
+    lockItem.textContent = hit.locked ? '🔓 解锁' : '🔒 锁定';
   }
 
   // 定位菜单（确保不超出视口）
@@ -450,6 +623,14 @@ document.getElementById('context-menu').addEventListener('click', (e) => {
   if (!el) { hideContextMenu(); return; }
 
   switch (action) {
+    case 'copy': {
+      copySelected();
+      break;
+    }
+    case 'paste': {
+      pasteClipboard();
+      break;
+    }
     case 'bring-front': {
       const maxZ = Elements.list.reduce((m, e) => Math.max(m, e.zIndex), 0);
       const oldZ = el.zIndex;
@@ -485,6 +666,10 @@ document.getElementById('context-menu').addEventListener('click', (e) => {
       if (count > 0) History.execute(new UngroupCommand(ungroupIds));
       break;
     }
+    case 'lock': {
+      toggleLock();
+      break;
+    }
     case 'delete': {
       // 编组元素：删除整个组
       const deleteIds = el.groupId
@@ -508,6 +693,111 @@ document.getElementById('context-menu').addEventListener('click', (e) => {
 });
 
 /* ================================================================
+ *  尺寸面板
+ * ================================================================ */
+let _sizePanelRatio = 1;
+let _sizePanelLocked = false;
+let _sizePanelUpdating = false;
+let _sizePanelOrig = null;
+
+function initSizePanel() {
+  const inputW = document.getElementById('input-width');
+  const inputH = document.getElementById('input-height');
+  const lockBtn = document.getElementById('btn-lock-ratio');
+  if (!inputW || !inputH || !lockBtn) return;
+
+  function getEl() {
+    if (Renderer.selectedIds.length !== 1) return null;
+    return Elements.get(Renderer.selectedIds[0]);
+  }
+
+  lockBtn.addEventListener('click', () => {
+    _sizePanelLocked = !_sizePanelLocked;
+    lockBtn.classList.toggle('active', _sizePanelLocked);
+    lockBtn.textContent = _sizePanelLocked ? '🔗' : '⛓️‍💥';
+    if (_sizePanelLocked) {
+      const el = getEl();
+      if (el && el.width && el.height) _sizePanelRatio = el.width / el.height;
+    }
+  });
+
+  inputW.addEventListener('input', () => {
+    if (_sizePanelUpdating) return;
+    const el = getEl();
+    if (!el) return;
+    const v = parseFloat(inputW.value);
+    if (isNaN(v) || v <= 0) return;
+    _sizePanelUpdating = true;
+    if (_sizePanelLocked && _sizePanelRatio > 0) inputH.value = Math.round(v / _sizePanelRatio);
+    _sizePanelUpdating = false;
+    el.width = v;
+    if (_sizePanelLocked && _sizePanelRatio > 0) el.height = Math.round(v / _sizePanelRatio);
+    Renderer.markDirty();
+  });
+
+  inputH.addEventListener('input', () => {
+    if (_sizePanelUpdating) return;
+    const el = getEl();
+    if (!el) return;
+    const v = parseFloat(inputH.value);
+    if (isNaN(v) || v <= 0) return;
+    _sizePanelUpdating = true;
+    if (_sizePanelLocked && _sizePanelRatio > 0) inputW.value = Math.round(v * _sizePanelRatio);
+    _sizePanelUpdating = false;
+    el.height = v;
+    if (_sizePanelLocked && _sizePanelRatio > 0) el.width = Math.round(v * _sizePanelRatio);
+    Renderer.markDirty();
+  });
+
+  function commit() {
+    const el = getEl();
+    if (!el) return;
+    const w = Math.round(parseFloat(inputW.value)) || el.width;
+    const h = Math.round(parseFloat(inputH.value)) || el.height;
+    el.width = w; el.height = h;
+    inputW.value = w; inputH.value = h;
+    if (_sizePanelOrig && (_sizePanelOrig.width !== w || _sizePanelOrig.height !== h)) {
+      History.execute(new ResizeElementCommand(el,
+        { width: _sizePanelOrig.width, height: _sizePanelOrig.height },
+        { width: w, height: h }
+      ));
+    }
+    _sizePanelOrig = null;
+    Renderer.markDirty();
+  }
+
+  inputW.addEventListener('blur', commit);
+  inputH.addEventListener('blur', commit);
+  inputW.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(); });
+  inputH.addEventListener('keydown', (e) => { if (e.key === 'Enter') commit(); });
+}
+
+function refreshSizePanel() {
+  const panel = document.getElementById('size-panel');
+  const inputW = document.getElementById('input-width');
+  const inputH = document.getElementById('input-height');
+  if (!panel || !inputW || !inputH) return;
+
+  if (Renderer.selectedIds.length !== 1) {
+    panel.style.display = 'none';
+    return;
+  }
+  const el = Elements.get(Renderer.selectedIds[0]);
+  if (!el || el.type === 'line' || el.type === 'arrow' || el.type === 'path') {
+    panel.style.display = 'none';
+    return;
+  }
+
+  panel.style.display = 'flex';
+  inputW.value = Math.round(el.width || 0);
+  inputH.value = Math.round(el.height || 0);
+  if (_sizePanelLocked && el.width && el.height) {
+    _sizePanelRatio = el.width / el.height;
+  }
+  _sizePanelOrig = { width: el.width, height: el.height };
+}
+
+/* ================================================================
  *  示例元素（首次加载时添加）
  * ================================================================ */
 function addWelcomeElements() {
@@ -520,6 +810,7 @@ function addWelcomeElements() {
     strokeColor: '#e6c200',
     strokeWidth: 1,
   });
+  Elements.list.push(sticky);
 
   const rect = Elements.create('rectangle', {
     x: 200, y: -50,
@@ -528,6 +819,7 @@ function addWelcomeElements() {
     strokeColor: '#007aff',
     strokeWidth: 2,
   });
+  Elements.list.push(rect);
 
   const ellipse = Elements.create('ellipse', {
     x: -200, y: -50,
@@ -536,6 +828,7 @@ function addWelcomeElements() {
     strokeColor: '#ff9500',
     strokeWidth: 2,
   });
+  Elements.list.push(ellipse);
 
   History.clear(); // 不把初始元素放入历史
 }

@@ -75,6 +75,7 @@ Tools.register('select', {
     this.resizeOrig = null;
     this.dragOrigPositions = [];
     Renderer.selectionBox = null;
+    Renderer.guides = [];
   },
 
   onMouseDown(sx, sy, e) {
@@ -177,6 +178,11 @@ Tools.register('select', {
     if (this.dragging) {
       const dx = w.x - this.dragStartWX;
       const dy = w.y - this.dragStartWY;
+
+      // 计算对齐参考线（仅显示，不吸附）
+      const snap = this._calcSnap(dx, dy);
+      Renderer.guides = snap ? snap.guides : [];
+
       for (const orig of this.dragOrigPositions) {
         const el = Elements.get(orig.id);
         if (!el) continue;
@@ -237,12 +243,17 @@ Tools.register('select', {
 
     if (this.resizing && this.resizeTarget && this.resizeOrig) {
       const el = this.resizeTarget;
-      if (el.x !== this.resizeOrig.x || el.y !== this.resizeOrig.y ||
-          el.width !== this.resizeOrig.width || el.height !== this.resizeOrig.height) {
-        History.execute(new ResizeElementCommand(el,
-          { x: this.resizeOrig.x, y: this.resizeOrig.y, width: this.resizeOrig.width, height: this.resizeOrig.height },
-          { x: el.x, y: el.y, width: el.width, height: el.height }
-        ));
+      const isLine = el.type === 'line' || el.type === 'arrow';
+      const oldProps = { x: this.resizeOrig.x, y: this.resizeOrig.y, width: this.resizeOrig.width, height: this.resizeOrig.height };
+      const newProps = { x: el.x, y: el.y, width: el.width, height: el.height };
+      if (isLine && this.resizeOrig.endX !== undefined) {
+        oldProps.endX = this.resizeOrig.endX;
+        oldProps.endY = this.resizeOrig.endY;
+        newProps.endX = el.endX;
+        newProps.endY = el.endY;
+      }
+      if (JSON.stringify(oldProps) !== JSON.stringify(newProps)) {
+        History.execute(new ResizeElementCommand(el, oldProps, newProps));
       }
     }
 
@@ -311,12 +322,97 @@ Tools.register('select', {
     if (width < minSize) { width = minSize; if (h.includes('w')) x = o.x + o.width - minSize; }
     if (height < minSize) { height = minSize; if (h.includes('n')) y = o.y + o.height - minSize; }
 
-    el.x = x;
-    el.y = y;
+    // 直线/箭头：同步更新端点坐标
+    if ((el.type === 'line' || el.type === 'arrow') && o.endX !== undefined) {
+      const origVecX = o.endX - o.x;
+      const origVecY = o.endY - o.y;
+      const scaleX = o.width > 0 ? width / o.width : 1;
+      const scaleY = o.height > 0 ? height / o.height : 1;
+      el.x = x;
+      el.y = y;
+      el.endX = el.x + origVecX * scaleX;
+      el.endY = el.y + origVecY * scaleY;
+    } else {
+      el.x = x;
+      el.y = y;
+    }
     el.width = width;
     el.height = height;
 
     Renderer.markDirty();
+  },
+
+  /** 计算对齐参考线（仅显示，不吸附） */
+  _calcSnap(rawDx, rawDy) {
+    const threshold = 5 / Camera.zoom;
+    const draggedIds = new Set(this.dragOrigPositions.map(o => o.id));
+
+    // 计算拖拽元素新位置的联合包围盒
+    let dMinX = Infinity, dMinY = Infinity, dMaxX = -Infinity, dMaxY = -Infinity;
+    for (const orig of this.dragOrigPositions) {
+      const el = Elements.get(orig.id);
+      if (!el) continue;
+      const b = Elements.getBounds(el);
+      const nx = b.x + rawDx, ny = b.y + rawDy;
+      dMinX = Math.min(dMinX, nx);
+      dMinY = Math.min(dMinY, ny);
+      dMaxX = Math.max(dMaxX, nx + b.width);
+      dMaxY = Math.max(dMaxY, ny + b.height);
+    }
+    const dCx = (dMinX + dMaxX) / 2;
+    const dCy = (dMinY + dMaxY) / 2;
+
+    // 收集所有其他元素的边
+    const edges = { left: [], right: [], top: [], bottom: [], cx: [], cy: [] };
+    for (const el of Elements.list) {
+      if (draggedIds.has(el.id)) continue;
+      const b = Elements.getBounds(el);
+      edges.left.push(b.minX);
+      edges.right.push(b.maxX);
+      edges.top.push(b.minY);
+      edges.bottom.push(b.maxY);
+      edges.cx.push(b.minX + b.width / 2);
+      edges.cy.push(b.minY + b.height / 2);
+    }
+
+    const checks = [
+      { dragPos: dMinX, pool: 'left',   type: 'v' },
+      { dragPos: dMaxX, pool: 'right',  type: 'v' },
+      { dragPos: dCx,   pool: 'cx',     type: 'v' },
+      { dragPos: dMinY, pool: 'top',    type: 'h' },
+      { dragPos: dMaxY, pool: 'bottom', type: 'h' },
+      { dragPos: dCy,   pool: 'cy',     type: 'h' },
+    ];
+
+    const guides = [];
+    for (const check of checks) {
+      const pool = edges[check.pool];
+      let closest = null, closestDist = threshold;
+      for (const e of pool) {
+        const dist = Math.abs(check.dragPos - e);
+        if (dist < closestDist) { closestDist = dist; closest = e; }
+      }
+      if (closest !== null) {
+        guides.push({ type: check.type, pos: closest });
+      }
+    }
+
+    // 去重 + 扩展参考线到画布可视范围
+    if (guides.length === 0) return null;
+
+    const tl = Camera.screenToWorld(0, 0);
+    const br = Camera.screenToWorld(window.innerWidth, window.innerHeight);
+    const seen = new Set();
+    const unique = [];
+    for (const g of guides) {
+      const key = g.type + ':' + g.pos.toFixed(2);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      g.startX = tl.x; g.endX = br.x;
+      g.startY = tl.y; g.endY = br.y;
+      unique.push(g);
+    }
+    return { guides: unique };
   },
 
   onDblClick(sx, sy, e) {
@@ -534,10 +630,10 @@ function makeShapeTool(type, cursor) {
         const y = Math.min(this.startWY, endY);
         const width = Math.abs(endX - this.startWX);
         const height = Math.abs(endY - this.startWY);
-        if (width < 3 || height < 3) return; // 太小忽略
+        if (width < 3 || height < 3) return;
         const el = Elements.create(type, {
           x, y, width, height,
-          fillColor: type === 'sticky-note' ? '#fff9c4' : appState.fillColor,
+          fillColor: appState.fillColor,
           strokeColor: appState.strokeColor,
           strokeWidth: appState.strokeWidth
         });
@@ -584,9 +680,10 @@ Tools.register('text', {
       width: 200, height: 30,
       text: '',
       fontSize: appState.fontSize || 20,
-      fillColor: appState.strokeColor,  // 文本颜色用线条颜色
+      fillColor: appState.strokeColor,
       strokeColor: 'transparent',
       strokeWidth: 0,
+      textAlign: appState.textAlign || 'left',
       fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif'
     });
     History.execute(new AddElementCommand(el));
@@ -598,12 +695,20 @@ Tools.register('text', {
     const textarea = document.getElementById('text-editor');
     if (!textarea) return;
 
-    const pos = Camera.worldToScreen(el.x, el.y);
+    // 根据对齐方式计算 textarea 的屏幕位置
+    let baseX = el.x;
+    if (el.textAlign === 'center') baseX = el.x + (el.width || 200) / 2;
+    else if (el.textAlign === 'right') baseX = el.x + (el.width || 200);
+    const pos = Camera.worldToScreen(baseX, el.y);
 
-    // 确保 textarea 在视口内
     const tw = Math.max(200, (el.width || 200) * Camera.zoom);
     const th = Math.max(30, (el.height || 30) * Camera.zoom);
     const fz = Math.max(12, (el.fontSize || 20) * Camera.zoom);
+
+    // 居中文本需要将 textarea 向左偏移一半宽度
+    let left = pos.x;
+    if (el.textAlign === 'center') left = pos.x - tw / 2;
+    else if (el.textAlign === 'right') left = pos.x - tw;
 
     // 文字颜色：便签始终用深色，文本元素用 fillColor
     const textColor = el.type === 'sticky-note'
@@ -611,7 +716,7 @@ Tools.register('text', {
       : (el.fillColor || '#000000');
 
     textarea.style.display = 'block';
-    textarea.style.left = Math.max(0, pos.x) + 'px';
+    textarea.style.left = Math.max(0, left) + 'px';
     textarea.style.top = Math.max(0, pos.y) + 'px';
     textarea.style.width = tw + 'px';
     textarea.style.minHeight = th + 'px';
@@ -620,6 +725,7 @@ Tools.register('text', {
     textarea.style.fontFamily = el.fontFamily || '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
     textarea.style.color = textColor;
     textarea.style.lineHeight = '1.5';
+    textarea.style.textAlign = el.textAlign || 'left';
     textarea.value = el.text || '';
 
     // 延迟 focus 确保 DOM 更新完成
@@ -887,4 +993,25 @@ Tools.register('hand', {
     this.panning = false;
     document.getElementById('main-canvas').style.cursor = 'grab';
   }
+});
+
+/* ================================================================
+ *  图片工具 (image)
+ * ================================================================ */
+Tools.register('image', {
+  name: 'image',
+  cursor: 'copy',
+
+  activate() {
+    // 激活时直接弹出文件选择器
+    document.getElementById('input-image-file').click();
+  },
+
+  onMouseDown(sx, sy, e) {
+    // 点击也弹出文件选择器
+    document.getElementById('input-image-file').click();
+  },
+
+  onMouseMove(sx, sy, e) {},
+  onMouseUp(sx, sy, e) {},
 });
