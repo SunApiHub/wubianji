@@ -253,6 +253,35 @@ ResizeElementCommand.prototype.undo = function() {
   Object.assign(this.el, this.oldProps);
 };
 
+/** 创建「表格状态」命令 */
+function TableStateCommand(el, oldState, newState) {
+  this.el = el;
+  this.oldState = JSON.parse(JSON.stringify(oldState));
+  this.newState = JSON.parse(JSON.stringify(newState));
+}
+TableStateCommand.prototype._apply = function(state) {
+  Object.assign(this.el, JSON.parse(JSON.stringify(state)));
+};
+TableStateCommand.prototype.execute = function() {
+  this._apply(this.newState);
+};
+TableStateCommand.prototype.undo = function() {
+  this._apply(this.oldState);
+};
+
+/** 创建「文字编辑」命令 */
+function TextEditCommand(el, oldProps, newProps) {
+  this.el = el;
+  this.oldProps = { ...oldProps };
+  this.newProps = { ...newProps };
+}
+TextEditCommand.prototype.execute = function() {
+  Object.assign(this.el, this.newProps);
+};
+TextEditCommand.prototype.undo = function() {
+  Object.assign(this.el, this.oldProps);
+};
+
 /**
  * 创建「更新元素样式」命令
  */

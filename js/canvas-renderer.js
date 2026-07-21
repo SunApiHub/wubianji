@@ -189,10 +189,15 @@ const Renderer = {
       case 'ellipse': this._drawEllipse(ctx, el); break;
       case 'line': this._drawLine(ctx, el); break;
       case 'arrow': this._drawArrow(ctx, el); break;
-      case 'text': this._drawText(ctx, el); break;
+      case 'text':
+        // 正在编辑时不渲染 canvas 文字，避免和 textarea 重影
+        if (Tools._tools.text && Tools._tools.text.editingEl === el) break;
+        this._drawText(ctx, el);
+        break;
       case 'sticky-note': this._drawStickyNote(ctx, el); break;
       case 'path': this._drawPath(ctx, el); break;
       case 'image': this._drawImage(ctx, el); break;
+      case 'table': this._drawTable(ctx, el); break;
     }
 
     // 锁定标识
@@ -446,13 +451,76 @@ const Renderer = {
     }
   },
 
+  _drawTable(ctx, el) {
+    const { x, y, colWidths, rowHeights, cells, strokeColor, strokeWidth, fillColor, defaultFontSize } = el;
+    if (!colWidths || !rowHeights) return;
+
+    const totalW = colWidths.reduce((a, b) => a + b, 0);
+    const totalH = rowHeights.reduce((a, b) => a + b, 0);
+    const defFz = defaultFontSize || 14;
+
+    if (fillColor && fillColor !== 'transparent') {
+      ctx.fillStyle = fillColor;
+      ctx.fillRect(x, y, totalW, totalH);
+    }
+
+    ctx.strokeStyle = strokeColor || '#000';
+    ctx.lineWidth = strokeWidth || 1;
+
+    let cy = y;
+    for (let r = 0; r < rowHeights.length; r++) {
+      let cx = x;
+      for (let c = 0; c < colWidths.length; c++) {
+        ctx.strokeRect(cx, cy, colWidths[c], rowHeights[r]);
+
+        const cell = (cells[r] && cells[r][c]);
+        // 跳过正在编辑的单元格，避免重影
+        const editing = Tools._tools.text && Tools._tools.text._editingCell;
+        if (editing && editing.table === el && editing.row === r && editing.col === c) {
+          cx += colWidths[c];
+          continue;
+        }
+        const cellText = typeof cell === 'string' ? cell : (cell?.text || '');
+        const cellFz = (cell && cell.fontSize) || defFz;
+        const cellColor = (cell && cell.color) || '#000';
+        const cellAlign = (cell && cell.textAlign) || 'left';
+
+        if (cellText) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(cx + 2, cy + 2, colWidths[c] - 4, rowHeights[r] - 4);
+          ctx.clip();
+
+          ctx.font = `${cellFz}px -apple-system, BlinkMacSystemFont, sans-serif`;
+          ctx.textBaseline = 'top';
+          ctx.textAlign = cellAlign;
+          ctx.fillStyle = cellColor;
+
+          const maxW = colWidths[c] - 4;
+          let baseX = cx + 2;
+          if (cellAlign === 'center') baseX = cx + colWidths[c] / 2;
+          else if (cellAlign === 'right') baseX = cx + colWidths[c] - 2;
+
+          const lines = this._wrapLines(ctx, cellText, maxW);
+          const lineH = cellFz * 1.3;
+          for (let i = 0; i < lines.length; i++) {
+            ctx.fillText(lines[i], baseX, cy + 2 + i * lineH);
+          }
+          ctx.restore();
+        }
+        cx += colWidths[c];
+      }
+      cy += rowHeights[r];
+    }
+  },
+
   /* ========================================================
    *  选中与手柄
    * ======================================================== */
 
   _drawSelection(ctx, el) {
     const b = Elements.getBounds(el);
-    const pad = Math.max(6 / Camera.zoom, 4);
+    const pad = 0;
 
     // 虚线边框
     ctx.save();
@@ -520,7 +588,7 @@ const Renderer = {
   hitTestHandle(el, sx, sy) {
     const wx = Camera.screenToWorld(sx, sy);
     const b = Elements.getBounds(el);
-    const pad = Math.max(6 / Camera.zoom, 4);
+    const pad = 0;
     const handles = this._getSelectionHandles(b, pad);
     const hitRadius = 10 / Camera.zoom;
 

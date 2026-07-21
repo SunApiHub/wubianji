@@ -338,6 +338,60 @@ html, body {
   opacity: 0.5;
 }
 
+/* === 场景导航 === */
+#scene-bar {
+  position: fixed;
+  bottom: 10px;
+  left: 16px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--surface);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  font-size: 12px;
+}
+
+#scene-bar button {
+  width: 24px; height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.15s;
+}
+#scene-bar button:hover { color: var(--text); border-color: var(--text-secondary); }
+
+#scene-label {
+  color: var(--text-secondary);
+  padding: 0 6px;
+  min-width: 40px;
+  text-align: center;
+  white-space: nowrap;
+  cursor: default;
+}
+
+#btn-scene-add {
+  font-size: 14px !important;
+  font-weight: bold;
+}
+
+#btn-present-mode {
+  color: var(--active) !important;
+  border-color: var(--active) !important;
+}
+
 /* === 尺寸面板 === */
 #size-panel {
   position: fixed;
@@ -405,40 +459,31 @@ html, body {
 .size-lock-btn:hover { border-color: var(--text-secondary); }
 .size-lock-btn.active { background: var(--active); border-color: var(--active); }
 
-/* === 文本编辑浮层 === */
+/* === 文本编辑浮层（内联模式：融入背景） === */
 #text-editor {
   position: fixed;
   z-index: 200;
-  border: 2px solid var(--active);
-  border-radius: var(--radius-sm);
-  padding: 8px 12px;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
   font-size: 16px;
   color: var(--text);
-  background: var(--surface);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: transparent;
   outline: none;
   resize: none;
   overflow: hidden;
-  min-width: 200px;
-  min-height: 30px;
-  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.15), var(--shadow-lg);
-  line-height: 1.5;
+  min-width: 1px;
+  min-height: 1px;
+  box-shadow: none;
+  line-height: 1.4;
   white-space: pre-wrap;
   word-wrap: break-word;
   caret-color: var(--active);
-}
-
-#text-editor::placeholder {
-  color: var(--text-secondary);
-  opacity: 0.5;
-}
-
-/* 编辑器聚焦时更明显的边框 */
-#text-editor:focus {
-  border-color: var(--active);
-  box-shadow: 0 0 0 4px rgba(0, 122, 255, 0.25), var(--shadow-lg);
+  -webkit-appearance: none;
+  appearance: none;
+  letter-spacing: normal;
 }
 
 /* === 右键菜单 === */

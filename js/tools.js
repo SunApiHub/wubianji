@@ -54,6 +54,13 @@ Tools.register('select', {
   rotateOrig: 0,
   boxSelecting: false,
   boxSelectStart: null,
+  // 表格内分隔线拖拽
+  gridDragging: false,
+  gridTable: null,
+  gridIndex: -1,
+  gridIsCol: true,
+  gridOrigW: null,
+  gridOrigH: null,
 
   activate() {
     this.reset();
@@ -71,6 +78,8 @@ Tools.register('select', {
     this.resizing = false;
     this.rotating = false;
     this.boxSelecting = false;
+    this.gridDragging = false;
+    this.gridTable = null;
     this.resizeHandle = null;
     this.resizeOrig = null;
     this.dragOrigPositions = [];
@@ -80,6 +89,9 @@ Tools.register('select', {
 
   onMouseDown(sx, sy, e) {
     const w = Camera.screenToWorld(sx, sy);
+
+    // 0. 检查是否拖拽表格内部分隔线
+    if (this._tryStartGridDrag(w.x, w.y)) return;
 
     // 检查是否点击了已有选中元素的手柄
     for (const id of Renderer.selectedIds) {
@@ -103,7 +115,9 @@ Tools.register('select', {
         this.resizeTarget = el;
         this.resizeOrig = {
           x: el.x, y: el.y, width: el.width, height: el.height,
-          endX: el.endX, endY: el.endY
+          endX: el.endX, endY: el.endY,
+          colWidths: el.colWidths ? [...el.colWidths] : undefined,
+          rowHeights: el.rowHeights ? [...el.rowHeights] : undefined,
         };
         return;
       }
@@ -154,8 +168,14 @@ Tools.register('select', {
   onMouseMove(sx, sy, e) {
     const w = Camera.screenToWorld(sx, sy);
 
-    // 光标样式
-    if (!this.dragging && !this.resizing && !this.rotating && !this.boxSelecting) {
+    // 表格内线拖拽
+    if (this.gridDragging) {
+      this._updateGridDrag(w.x, w.y);
+      return;
+    }
+
+    // 光标样式（包括表格内线 hover）
+    if (!this.dragging && !this.resizing && !this.rotating && !this.boxSelecting && !this.gridDragging) {
       let newCursor = 'default';
       for (const id of Renderer.selectedIds) {
         const el = Elements.get(id);
@@ -166,6 +186,13 @@ Tools.register('select', {
           const cursors = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize' };
           newCursor = cursors[h] || 'default';
           break;
+        }
+      }
+      if (newCursor === 'default') {
+        // 表格内部分隔线 hover
+        const gridInfo = this._getGridLine(Renderer.selectedIds, w.x, w.y);
+        if (gridInfo) {
+          newCursor = gridInfo.isCol ? 'ew-resize' : 'ns-resize';
         }
       }
       if (newCursor === 'default') {
@@ -220,6 +247,12 @@ Tools.register('select', {
   },
 
   onMouseUp(sx, sy, e) {
+    // 结束表格内线拖拽
+    if (this.gridDragging) {
+      this._endGridDrag();
+      return;
+    }
+
     if (this.dragging) {
       // 记录移动命令
       const commands = [];
@@ -244,13 +277,18 @@ Tools.register('select', {
     if (this.resizing && this.resizeTarget && this.resizeOrig) {
       const el = this.resizeTarget;
       const isLine = el.type === 'line' || el.type === 'arrow';
+      const isTable = el.type === 'table';
       const oldProps = { x: this.resizeOrig.x, y: this.resizeOrig.y, width: this.resizeOrig.width, height: this.resizeOrig.height };
       const newProps = { x: el.x, y: el.y, width: el.width, height: el.height };
       if (isLine && this.resizeOrig.endX !== undefined) {
-        oldProps.endX = this.resizeOrig.endX;
-        oldProps.endY = this.resizeOrig.endY;
-        newProps.endX = el.endX;
-        newProps.endY = el.endY;
+        oldProps.endX = this.resizeOrig.endX; oldProps.endY = this.resizeOrig.endY;
+        newProps.endX = el.endX; newProps.endY = el.endY;
+      }
+      if (isTable && this.resizeOrig.colWidths) {
+        oldProps.colWidths = [...this.resizeOrig.colWidths];
+        oldProps.rowHeights = [...this.resizeOrig.rowHeights];
+        newProps.colWidths = [...el.colWidths];
+        newProps.rowHeights = [...el.rowHeights];
       }
       if (JSON.stringify(oldProps) !== JSON.stringify(newProps)) {
         History.execute(new ResizeElementCommand(el, oldProps, newProps));
@@ -332,12 +370,34 @@ Tools.register('select', {
       el.y = y;
       el.endX = el.x + origVecX * scaleX;
       el.endY = el.y + origVecY * scaleY;
+    }
+    // 表格：按比例缩放列宽和行高，确保总和匹配目标尺寸
+    else if (el.type === 'table' && o.colWidths && o.rowHeights) {
+      el.x = x;
+      el.y = y;
+      // 先按比例分配，再用最后一列/行吸收误差
+      const sx = o.width > 0 ? width / o.width : 1;
+      const sy = o.height > 0 ? height / o.height : 1;
+      // 始终从缩放开始时的尺寸计算，避免每个 mousemove 叠加缩放误差
+      const newColW = o.colWidths.map(w => Math.max(20, Math.round(w * sx)));
+      const newRowH = o.rowHeights.map(h => Math.max(20, Math.round(h * sy)));
+      // 调整最后一列/行使总和精确等于 width/height
+      const colDiff = Math.round(width) - newColW.reduce((a, b) => a + b, 0);
+      const rowDiff = Math.round(height) - newRowH.reduce((a, b) => a + b, 0);
+      if (newColW.length > 0) newColW[newColW.length - 1] = Math.max(20, newColW[newColW.length - 1] + colDiff);
+      if (newRowH.length > 0) newRowH[newRowH.length - 1] = Math.max(20, newRowH[newRowH.length - 1] + rowDiff);
+      el.colWidths = newColW;
+      el.rowHeights = newRowH;
+      el.width = el.colWidths.reduce((a, b) => a + b, 0);
+      el.height = el.rowHeights.reduce((a, b) => a + b, 0);
     } else {
       el.x = x;
       el.y = y;
     }
-    el.width = width;
-    el.height = height;
+    if (el.type !== 'table') {
+      el.width = width;
+      el.height = height;
+    }
 
     Renderer.markDirty();
   },
@@ -415,12 +475,107 @@ Tools.register('select', {
     return { guides: unique };
   },
 
+  /** 检测是否在表格内部分隔线上 */
+  _getGridLine(selectedIds, wx, wy) {
+    const hitDist = 5 / Camera.zoom;
+    for (const id of selectedIds) {
+      const el = Elements.get(id);
+      if (!el || el.type !== 'table' || !el.colWidths || !el.rowHeights) continue;
+
+      // 检查列分隔线
+      let cx = el.x;
+      for (let c = 0; c < el.colWidths.length - 1; c++) {
+        cx += el.colWidths[c];
+        if (Math.abs(wx - cx) < hitDist && wy >= el.y && wy <= el.y + el.height) {
+          return { table: el, index: c, isCol: true };
+        }
+      }
+
+      // 检查行分隔线
+      let cy = el.y;
+      for (let r = 0; r < el.rowHeights.length - 1; r++) {
+        cy += el.rowHeights[r];
+        if (Math.abs(wy - cy) < hitDist && wx >= el.x && wx <= el.x + el.width) {
+          return { table: el, index: r, isCol: false };
+        }
+      }
+    }
+    return null;
+  },
+
+  _tryStartGridDrag(wx, wy) {
+    const info = this._getGridLine(Renderer.selectedIds, wx, wy);
+    if (!info) return false;
+
+    this.gridDragging = true;
+    this.gridTable = info.table;
+    this.gridIndex = info.index;
+    this.gridIsCol = info.isCol;
+    this.gridOrigW = [...info.table.colWidths];
+    this.gridOrigH = [...info.table.rowHeights];
+    return true;
+  },
+
+  _updateGridDrag(wx, wy) {
+    const el = this.gridTable;
+    if (!el) return;
+
+    if (this.gridIsCol) {
+      // 拖动列分隔线：调整相邻两列的宽度，总宽不变
+      const i = this.gridIndex;
+      const totalW = this.gridOrigW[i] + this.gridOrigW[i + 1];
+      let cx = el.x;
+      for (let c = 0; c < i; c++) cx += this.gridOrigW[c];
+      let newW0 = Math.max(20, wx - cx);
+      let newW1 = Math.max(20, totalW - newW0);
+      if (newW0 + newW1 !== totalW) newW0 = totalW - newW1;
+      el.colWidths[i] = newW0;
+      el.colWidths[i + 1] = newW1;
+      el.width = el.colWidths.reduce((a, b) => a + b, 0);
+    } else {
+      // 拖动行分隔线
+      const i = this.gridIndex;
+      const totalH = this.gridOrigH[i] + this.gridOrigH[i + 1];
+      let cy = el.y;
+      for (let r = 0; r < i; r++) cy += this.gridOrigH[r];
+      let newH0 = Math.max(20, wy - cy);
+      let newH1 = Math.max(20, totalH - newH0);
+      if (newH0 + newH1 !== totalH) newH0 = totalH - newH1;
+      el.rowHeights[i] = newH0;
+      el.rowHeights[i + 1] = newH1;
+      el.height = el.rowHeights.reduce((a, b) => a + b, 0);
+    }
+    Renderer.markDirty();
+  },
+
+  _endGridDrag() {
+    if (this.gridTable) {
+      const el = this.gridTable;
+      const oldW = [...this.gridOrigW];
+      const oldH = [...this.gridOrigH];
+      History.execute(new ResizeElementCommand(el,
+        { colWidths: oldW, rowHeights: oldH },
+        { colWidths: [...el.colWidths], rowHeights: [...el.rowHeights] }
+      ));
+    }
+    this.gridDragging = false;
+    this.gridTable = null;
+    this.gridIndex = -1;
+  },
+
   onDblClick(sx, sy, e) {
     const w = Camera.screenToWorld(sx, sy);
     const hit = Elements.hitTest(w.x, w.y);
-    if (hit && (hit.type === 'text' || hit.type === 'sticky-note')) {
-      Tools.switchTo('text');
-      Tools._tools['text'].startEditing(hit);
+    if (hit) {
+      if (hit.type === 'text' || hit.type === 'sticky-note') {
+        Tools.switchTo('text');
+        Tools._tools['text'].startEditing(hit);
+      } else if (hit.type === 'table') {
+        const cell = getTableCell(hit, w.x, w.y);
+        if (cell) {
+          editTableCell(hit, cell.row, cell.col);
+        }
+      }
     }
   }
 });
@@ -692,41 +847,50 @@ Tools.register('text', {
 
   startEditing(el) {
     this.editingEl = el;
+    this.editingOrig = { text: el.text || '', width: el.width, height: el.height };
     const textarea = document.getElementById('text-editor');
     if (!textarea) return;
 
-    // 根据对齐方式计算 textarea 的屏幕位置
-    let baseX = el.x;
-    if (el.textAlign === 'center') baseX = el.x + (el.width || 200) / 2;
-    else if (el.textAlign === 'right') baseX = el.x + (el.width || 200);
-    const pos = Camera.worldToScreen(baseX, el.y);
-
-    const tw = Math.max(200, (el.width || 200) * Camera.zoom);
-    const th = Math.max(30, (el.height || 30) * Camera.zoom);
     const fz = Math.max(12, (el.fontSize || 20) * Camera.zoom);
+    const tw = Math.max(100, (el.width || 200) * Camera.zoom);
 
-    // 居中文本需要将 textarea 向左偏移一半宽度
-    let left = pos.x;
-    if (el.textAlign === 'center') left = pos.x - tw / 2;
-    else if (el.textAlign === 'right') left = pos.x - tw;
-
-    // 文字颜色：便签始终用深色，文本元素用 fillColor
+    // 文字颜色
     const textColor = el.type === 'sticky-note'
       ? '#333333'
       : (el.fillColor || '#000000');
+
+    // 便签文字有 10px 内边距
+    const isSticky = el.type === 'sticky-note';
+    const padX = isSticky ? 10 * Camera.zoom : 0;
+    const padY = isSticky ? 10 * Camera.zoom : 0;
+
+    // 对齐基准
+    let baseX = el.x;
+    if (el.textAlign === 'center') baseX = el.x + (el.width || 200) / 2;
+    else if (el.textAlign === 'right') baseX = el.x + (el.width || 200);
+
+    const pos = Camera.worldToScreen(baseX + (isSticky ? 10 : 0), el.y + (isSticky ? 10 : 0));
+    let left = pos.x;
+    if (el.textAlign === 'center') left = pos.x - tw / 2;
+    else if (el.textAlign === 'right') left = pos.x - tw;
 
     textarea.style.display = 'block';
     textarea.style.left = Math.max(0, left) + 'px';
     textarea.style.top = Math.max(0, pos.y) + 'px';
     textarea.style.width = tw + 'px';
-    textarea.style.minHeight = th + 'px';
-    textarea.style.height = 'auto';
+    textarea.style.minWidth = tw + 'px';
+    textarea.style.minHeight = (fz * 1.4) + 'px';
     textarea.style.fontSize = fz + 'px';
     textarea.style.fontFamily = el.fontFamily || '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif';
     textarea.style.color = textColor;
-    textarea.style.lineHeight = '1.5';
+    textarea.style.lineHeight = '1.4';
     textarea.style.textAlign = el.textAlign || 'left';
     textarea.value = el.text || '';
+    // 设置完内容后强制更新高度以显示所有行
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.max(fz * 1.4, textarea.scrollHeight) + 'px';
+    textarea.style.padding = '0';
+    textarea.style.margin = '0';
 
     // 延迟 focus 确保 DOM 更新完成
     requestAnimationFrame(() => {
@@ -738,16 +902,30 @@ Tools.register('text', {
 
     this._onInput = () => {
       el.text = textarea.value;
-      // 自适应高度
       textarea.style.height = 'auto';
-      textarea.style.height = Math.max(th, textarea.scrollHeight) + 'px';
+      textarea.style.height = textarea.scrollHeight + 'px';
       el.height = textarea.scrollHeight / Camera.zoom;
       el.width = textarea.clientWidth / Camera.zoom;
       Renderer.markDirty();
     };
 
+    // 跟踪工具栏点击，防止编辑失焦
+    if (!window._toolbarClickGuard) {
+      window._toolbarClickGuard = true;
+      document.getElementById('toolbar').addEventListener('pointerdown', () => {
+        window._toolbarClicked = true;
+        setTimeout(() => { window._toolbarClicked = false; }, 300);
+      });
+      const sizePanel = document.getElementById('size-panel');
+      if (sizePanel) sizePanel.addEventListener('pointerdown', () => {
+        window._toolbarClicked = true;
+        setTimeout(() => { window._toolbarClicked = false; }, 300);
+      });
+    }
+
     this._onBlur = () => {
-      // 延迟提交，避免与 mousedown 冲突
+      // 工具栏点击不提交编辑
+      if (window._toolbarClicked) return;
       setTimeout(() => this._commitEditing(), 150);
     };
 
@@ -779,23 +957,37 @@ Tools.register('text', {
 
     if (this.editingEl) {
       const el = this.editingEl;
+      const original = this.editingOrig || { text: el.text || '', width: el.width, height: el.height };
+      // 先固定最终尺寸，再将文字内容和尺寸一起写入历史
+      el.width = Math.max(el.width || 200, textarea.clientWidth / Camera.zoom);
+      el.height = Math.max(el.height || 30, textarea.scrollHeight / Camera.zoom);
       // 如果文本为空（且是 text 类型），删除元素 — 通过历史系统
       if (el.type === 'text' && (!el.text || el.text.trim() === '')) {
         const idx = Elements.list.indexOf(el);
         if (idx !== -1) {
           Elements.list.splice(idx, 1);
-          History.execute(new DeleteElementCommand(el, idx));
+          const last = History.undoStack[History.undoStack.length - 1];
+          if (last instanceof AddElementCommand && last.el === el) {
+            History.undoStack.pop();
+            History._onChange();
+          } else {
+            History.execute(new DeleteElementCommand(el, idx));
+          }
         }
         Renderer.selectedIds = Renderer.selectedIds.filter(id => id !== el.id);
+      } else if (el.text !== original.text || el.width !== original.width || el.height !== original.height) {
+        History.execute(new TextEditCommand(el, original, {
+          text: el.text,
+          width: el.width,
+          height: el.height
+        }));
       }
-      // 更新元素尺寸以匹配 textarea
-      el.width = Math.max(el.width || 200, textarea.clientWidth / Camera.zoom);
-      el.height = Math.max(el.height || 30, textarea.scrollHeight / Camera.zoom);
     }
 
     textarea.style.display = 'none';
     textarea.value = '';
     this.editingEl = null;
+    this.editingOrig = null;
     Renderer.markDirty();
   },
 
@@ -1003,15 +1195,51 @@ Tools.register('image', {
   cursor: 'copy',
 
   activate() {
-    // 激活时直接弹出文件选择器
     document.getElementById('input-image-file').click();
   },
 
   onMouseDown(sx, sy, e) {
-    // 点击也弹出文件选择器
     document.getElementById('input-image-file').click();
   },
 
   onMouseMove(sx, sy, e) {},
   onMouseUp(sx, sy, e) {},
+});
+
+/* ================================================================
+ *  表格工具 (table)
+ * ================================================================ */
+Tools.register('table', {
+  name: 'table',
+  cursor: 'crosshair',
+
+  activate() { this._insert(); },
+  onMouseDown() { this._insert(); },
+
+  _insert() {
+    const rows = 3, cols = 3, colW = 100, rowH = 30;
+    const center = Camera.screenToWorld(window.innerWidth / 2, window.innerHeight / 2);
+    const cells = Array.from({ length: rows }, () => Array(cols).fill(''));
+
+    const el = Elements.create('table', {
+      x: center.x - (cols * colW) / 2,
+      y: center.y - (rows * rowH) / 2,
+      width: cols * colW, height: rows * rowH,
+      rows, cols,
+      colWidths: Array(cols).fill(colW),
+      rowHeights: Array(rows).fill(rowH),
+      cells,
+      fillColor: '#ffffff',
+      strokeColor: '#000000',
+      strokeWidth: 1.5,
+    });
+    History.execute(new AddElementCommand(el));
+    Renderer.selectedIds = [el.id];
+    Renderer.markDirty();
+    UI.updateStatus();
+    Tools.switchTo('select');
+  },
+
+  onMouseMove() {},
+  onMouseUp() {},
 });

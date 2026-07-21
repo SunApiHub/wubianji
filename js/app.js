@@ -13,6 +13,9 @@ const appState = {
 
 /** 剪贴板 */
 let _clipboard = [];
+let _scenes = [];
+let _currentScene = -1;
+let _presentMode = false;
 
 /** 当历史状态改变时的回调 */
 function onHistoryChange() {
@@ -30,11 +33,12 @@ const SaveManager = {
 
   /** 序列化当前状态 */
   serialize() {
-    return JSON.stringify({
-      version: 1,
-      camera: { x: Camera.x, y: Camera.y, zoom: Camera.zoom },
-      elements: Elements.list
-    });
+	    return JSON.stringify({
+	      version: 1,
+	      camera: { x: Camera.x, y: Camera.y, zoom: Camera.zoom },
+	      elements: Elements.list,
+	      scenes: _scenes,
+	    });
   },
 
   /** 反序列化并恢复状态 */
@@ -53,6 +57,11 @@ const SaveManager = {
         Camera.y = data.camera.y || 0;
         Camera.zoom = data.camera.zoom || 1;
       }
+
+      // 恢复场景
+      _scenes = data.scenes || [];
+      _currentScene = _scenes.length > 0 ? 0 : -1;
+      refreshSceneUI();
 
       // 清空历史（无法跨会话撤销）
       History.clear();
@@ -151,7 +160,10 @@ const SaveManager = {
   // 3. 尝试加载已保存的数据
   const loaded = SaveManager.loadFromLocal();
 
-  // 4. 如果没有已保存数据，添加欢迎元素
+  // 4. 每次打开默认 100% 视图
+  Camera.zoom = 1;
+
+  // 5. 如果没有已保存数据，添加欢迎元素
   if (!loaded) {
     Camera.x = cw / 2;
     Camera.y = ch / 2;
@@ -170,6 +182,9 @@ const SaveManager = {
 
   // 8. 图片插入
   initImageInsert();
+
+  // 8.5 场景
+  initSceneUI();
 
   // 9. 启动渲染循环
   Renderer.startLoop();
@@ -510,6 +525,149 @@ function startShapeText(shapeEl) {
   Tools._tools['text'].startEditing(textEl);
 }
 
+/* ================================================================
+ *  表格操作
+ * ================================================================ */
+
+/** 获取点击位置所在的单元格 */
+function getTableCell(el, wx, wy) {
+  if (el.type !== 'table') return null;
+  let cy = el.y;
+  for (let r = 0; r < el.rowHeights.length; r++) {
+    let cx = el.x;
+    for (let c = 0; c < el.colWidths.length; c++) {
+      if (wx >= cx && wx <= cx + el.colWidths[c] &&
+          wy >= cy && wy <= cy + el.rowHeights[r]) {
+        return { row: r, col: c };
+      }
+      cx += el.colWidths[c];
+    }
+    cy += el.rowHeights[r];
+  }
+  return null;
+}
+
+/** 编辑表格单元格 */
+function editTableCell(tableEl, row, col) {
+  const cell = (tableEl.cells[row] && tableEl.cells[row][col]);
+  const cellText = typeof cell === 'string' ? cell : (cell?.text || '');
+  const cellFz = (cell && cell.fontSize) || tableEl.defaultFontSize || 14;
+  const cellColor = (cell && cell.color) || '#000000';
+  const cellAlign = (cell && cell.textAlign) || 'left';
+
+  let cellX = tableEl.x, cellY = tableEl.y;
+  for (let c = 0; c < col; c++) cellX += tableEl.colWidths[c];
+  for (let r = 0; r < row; r++) cellY += tableEl.rowHeights[r];
+
+  const textEl = {
+    type: 'text', id: '_table_cell_',
+    x: cellX + 2, y: cellY + 2,
+    width: tableEl.colWidths[col] - 4,
+    height: tableEl.rowHeights[row] - 4,
+    text: cellText,
+    fontSize: cellFz,
+    fillColor: cellColor,
+    strokeColor: 'transparent', strokeWidth: 0,
+    textAlign: cellAlign,
+    fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+  };
+
+  const origCommit = Tools._tools['text']._commitEditing;
+  const textTool = Tools._tools['text'];
+  // 记录正在编辑的单元格，供渲染器跳过
+  textTool._editingCell = { table: tableEl, row, col, textEl };
+
+  textTool._commitEditing = function() {
+    const textarea = document.getElementById('text-editor');
+    if (!textarea || textarea.style.display === 'none') {
+      textTool._commitEditing = origCommit;
+      textTool._editingCell = null;
+      return;
+    }
+    const newText = textarea.value;
+    if (tableEl.cells[row] && tableEl.cells[row][col] !== undefined) {
+      tableEl.cells[row][col] = {
+        text: newText,
+        fontSize: textEl.fontSize,
+        color: textEl.fillColor,
+        textAlign: textEl.textAlign,
+      };
+    }
+    textTool._commitEditing = origCommit;
+    textTool._editingCell = null;
+    origCommit.call(textTool);
+    Renderer.markDirty();
+    SaveManager.autoSave();
+  };
+
+  Tools._tools['text'].startEditing(textEl);
+}
+
+function getTableState(tableEl) {
+  return {
+    rows: tableEl.rows,
+    cols: tableEl.cols,
+    width: tableEl.width,
+    height: tableEl.height,
+    colWidths: tableEl.colWidths,
+    rowHeights: tableEl.rowHeights,
+    cells: tableEl.cells
+  };
+}
+
+// 右键点击时记录的世界坐标（供表格操作使用）
+let _ctxWorldPos = { x: 0, y: 0 };
+
+/** 添加行 */
+function tableAddRow(tableEl, afterRow) {
+  const oldState = getTableState(tableEl);
+  const newRow = afterRow ?? tableEl.rows - 1;
+  const rowH = 30;
+  tableEl.rows++;
+  tableEl.rowHeights.splice(newRow + 1, 0, rowH);
+  tableEl.cells.splice(newRow + 1, 0, Array(tableEl.cols).fill(''));
+  tableEl.height = tableEl.rowHeights.reduce((a, b) => a + b, 0);
+  History.execute(new TableStateCommand(tableEl, oldState, getTableState(tableEl)));
+  Renderer.markDirty();
+}
+
+/** 删除行 */
+function tableDeleteRow(tableEl, row) {
+  if (tableEl.rows <= 1) return;
+  const oldState = getTableState(tableEl);
+  tableEl.rows--;
+  tableEl.rowHeights.splice(row, 1);
+  tableEl.cells.splice(row, 1);
+  tableEl.height = tableEl.rowHeights.reduce((a, b) => a + b, 0);
+  History.execute(new TableStateCommand(tableEl, oldState, getTableState(tableEl)));
+  Renderer.markDirty();
+}
+
+/** 添加列 */
+function tableAddCol(tableEl, afterCol) {
+  const oldState = getTableState(tableEl);
+  const newCol = afterCol ?? tableEl.cols - 1;
+  const colW = 80;
+  tableEl.cols++;
+  tableEl.colWidths.splice(newCol + 1, 0, colW);
+  for (const row of tableEl.cells) row.splice(newCol + 1, 0, '');
+  tableEl.width = tableEl.colWidths.reduce((a, b) => a + b, 0);
+  History.execute(new TableStateCommand(tableEl, oldState, getTableState(tableEl)));
+  Renderer.markDirty();
+}
+
+/** 删除列 */
+function tableDeleteCol(tableEl, col) {
+  if (tableEl.cols <= 1) return;
+  const oldState = getTableState(tableEl);
+  tableEl.cols--;
+  tableEl.colWidths.splice(col, 1);
+  for (const row of tableEl.cells) row.splice(col, 1);
+  tableEl.width = tableEl.colWidths.reduce((a, b) => a + b, 0);
+  History.execute(new TableStateCommand(tableEl, oldState, getTableState(tableEl)));
+  Renderer.markDirty();
+}
+
 /** 图片插入功能 */
 function initImageInsert() {
   const input = document.getElementById('input-image-file');
@@ -580,6 +738,7 @@ function showContextMenu(mx, my) {
   }
 
   _ctxTargetId = hit.id;
+  _ctxWorldPos = { x: w.x, y: w.y };
 
   // 如果没有选中该元素，先选中它
   if (!Renderer.selectedIds.includes(hit.id)) {
@@ -591,6 +750,23 @@ function showContextMenu(mx, my) {
   const lockItem = menu.querySelector('[data-action="lock"]');
   if (lockItem) {
     lockItem.textContent = hit.locked ? '🔓 解锁' : '🔒 锁定';
+  }
+
+  // 表格菜单项只在选中表格时显示
+  const isTable = hit.type === 'table';
+  menu.querySelectorAll('[data-action^="table-"]').forEach(item => {
+    item.style.display = isTable ? '' : 'none';
+  });
+  if (isTable) {
+    const sepBefore = menu.querySelector('[data-action="table-add-row"]').previousElementSibling;
+    if (sepBefore && sepBefore.classList.contains('ctx-sep')) sepBefore.style.display = '';
+    const sepAfter = menu.querySelector('[data-action="table-del-col"]').nextElementSibling;
+    if (sepAfter && sepAfter.classList.contains('ctx-sep')) sepAfter.style.display = '';
+  } else {
+    const sepBefore = menu.querySelector('[data-action="table-add-row"]').previousElementSibling;
+    if (sepBefore && sepBefore.classList.contains('ctx-sep')) sepBefore.style.display = 'none';
+    const sepAfter = menu.querySelector('[data-action="table-del-col"]').nextElementSibling;
+    if (sepAfter && sepAfter.classList.contains('ctx-sep')) sepAfter.style.display = 'none';
   }
 
   // 定位菜单（确保不超出视口）
@@ -664,6 +840,34 @@ document.getElementById('context-menu').addEventListener('click', (e) => {
         : [el.id];
       const count = Elements.ungroupElements(ungroupIds);
       if (count > 0) History.execute(new UngroupCommand(ungroupIds));
+      break;
+    }
+    case 'table-add-row': {
+      if (el.type === 'table') {
+        const cell = getTableCell(el, _ctxWorldPos.x, _ctxWorldPos.y);
+        tableAddRow(el, cell ? cell.row : null);
+      }
+      break;
+    }
+    case 'table-del-row': {
+      if (el.type === 'table') {
+        const cell = getTableCell(el, _ctxWorldPos.x, _ctxWorldPos.y);
+        if (cell) tableDeleteRow(el, cell.row);
+      }
+      break;
+    }
+    case 'table-add-col': {
+      if (el.type === 'table') {
+        const cell = getTableCell(el, _ctxWorldPos.x, _ctxWorldPos.y);
+        tableAddCol(el, cell ? cell.col : null);
+      }
+      break;
+    }
+    case 'table-del-col': {
+      if (el.type === 'table') {
+        const cell = getTableCell(el, _ctxWorldPos.x, _ctxWorldPos.y);
+        if (cell) tableDeleteCol(el, cell.col);
+      }
       break;
     }
     case 'lock': {
@@ -754,6 +958,17 @@ function initSizePanel() {
     if (!el) return;
     const w = Math.round(parseFloat(inputW.value)) || el.width;
     const h = Math.round(parseFloat(inputH.value)) || el.height;
+
+    // 表格：按比例缩放列宽/行高
+    if (el.type === 'table' && el.colWidths && el.rowHeights) {
+      const sx = el.width > 0 ? w / el.width : 1;
+      const sy = el.height > 0 ? h / el.height : 1;
+      el.colWidths = el.colWidths.map(cw => Math.max(20, Math.round(cw * sx)));
+      el.rowHeights = el.rowHeights.map(rh => Math.max(20, Math.round(rh * sy)));
+      el.width = el.colWidths.reduce((a, b) => a + b, 0);
+      el.height = el.rowHeights.reduce((a, b) => a + b, 0);
+    }
+
     el.width = w; el.height = h;
     inputW.value = w; inputH.value = h;
     if (_sizePanelOrig && (_sizePanelOrig.width !== w || _sizePanelOrig.height !== h)) {
@@ -796,6 +1011,161 @@ function refreshSizePanel() {
   }
   _sizePanelOrig = { width: el.width, height: el.height };
 }
+
+/* ================================================================
+ *  场景 (Scenes)
+ * ================================================================ */
+
+/** 保存当前视图为场景 */
+function saveScene(name) {
+  _scenes.push({
+    name: name || ('场景 ' + (_scenes.length + 1)),
+    camera: { x: Camera.x, y: Camera.y, zoom: Camera.zoom },
+  });
+  _currentScene = _scenes.length - 1;
+  refreshSceneUI();
+  SaveManager.saveToLocal();
+}
+
+/** 跳转到指定场景（带动画） */
+function goToScene(index) {
+  if (index < 0 || index >= _scenes.length) return;
+  const s = _scenes[index];
+  _currentScene = index;
+  refreshSceneUI();
+
+  // 动画过渡
+  const startX = Camera.x, startY = Camera.y, startZoom = Camera.zoom;
+  const endX = s.camera.x, endY = s.camera.y;
+  const endZoom = Math.max(0.1, Math.min(10, s.camera.zoom));
+  const duration = 500; // ms
+  const startTime = performance.now();
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(1, elapsed / duration);
+    // ease-in-out
+    const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+    Camera.x = startX + (endX - startX) * ease;
+    Camera.y = startY + (endY - startY) * ease;
+    Camera.zoom = startZoom + (endZoom - startZoom) * ease;
+    Renderer.markDirty();
+    UI.updateStatus();
+    if (t < 1) {
+      requestAnimationFrame(animate);
+    }
+  }
+  requestAnimationFrame(animate);
+}
+
+/** 下一个场景 */
+function nextScene() {
+  if (_scenes.length === 0) return;
+  goToScene((_currentScene + 1) % _scenes.length);
+}
+
+/** 上一个场景 */
+function prevScene() {
+  if (_scenes.length === 0) return;
+  goToScene((_currentScene - 1 + _scenes.length) % _scenes.length);
+}
+
+/** 删除场景 */
+function deleteScene(index) {
+  if (index < 0 || index >= _scenes.length) return;
+  _scenes.splice(index, 1);
+  if (_currentScene >= _scenes.length) _currentScene = _scenes.length - 1;
+  refreshSceneUI();
+  SaveManager.saveToLocal();
+}
+
+/** 重命名场景 */
+function renameScene(index, name) {
+  if (index < 0 || index >= _scenes.length) return;
+  _scenes[index].name = name;
+  refreshSceneUI();
+  SaveManager.saveToLocal();
+}
+
+/** 刷新场景 UI */
+function refreshSceneUI() {
+  const label = document.getElementById('scene-label');
+  if (!label) return;
+  if (_scenes.length === 0) {
+    label.textContent = '无场景';
+  } else {
+    const idx = Math.max(0, _currentScene);
+    label.textContent = (idx + 1) + '/' + _scenes.length + ' ' + _scenes[idx].name;
+  }
+}
+
+/** 初始化场景 UI */
+function initSceneUI() {
+  document.getElementById('btn-present-mode').addEventListener('click', togglePresentMode);
+  document.getElementById('btn-scene-prev').addEventListener('click', prevScene);
+  document.getElementById('btn-scene-next').addEventListener('click', nextScene);
+  document.getElementById('btn-scene-add').addEventListener('click', () => {
+    const name = prompt('场景名称:', '场景 ' + (_scenes.length + 1));
+    if (name !== null) saveScene(name || undefined);
+  });
+  // 双击标签重命名当前场景
+  document.getElementById('scene-label').addEventListener('dblclick', () => {
+    if (_scenes.length === 0 || _currentScene < 0) return;
+    const name = prompt('重命名:', _scenes[_currentScene].name);
+    if (name !== null && name.trim()) renameScene(_currentScene, name.trim());
+  });
+  // 右键标签删除场景
+  document.getElementById('scene-label').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    if (_scenes.length === 0 || _currentScene < 0) return;
+    if (confirm('删除场景「' + _scenes[_currentScene].name + '」？')) {
+      deleteScene(_currentScene);
+    }
+  });
+  refreshSceneUI();
+}
+
+/* ================================================================
+ *  演讲模式
+ * ================================================================ */
+function togglePresentMode() {
+  _presentMode = !_presentMode;
+  ['toolbar', 'statusbar', 'size-panel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = _presentMode ? 'none' : '';
+  });
+  // 场景栏保留播放按钮
+  const sceneBar = document.getElementById('scene-bar');
+  const presentBtn = document.getElementById('btn-present-mode');
+  if (sceneBar) {
+    document.getElementById('btn-scene-prev').style.display = _presentMode ? 'none' : '';
+    document.getElementById('btn-scene-next').style.display = _presentMode ? 'none' : '';
+    document.getElementById('btn-scene-add').style.display = _presentMode ? 'none' : '';
+    document.getElementById('scene-label').style.display = _presentMode ? 'none' : '';
+  }
+  if (presentBtn) {
+    presentBtn.innerHTML = _presentMode
+      ? '<svg viewBox="0 0 24 24" width="14" height="14"><rect x="5" y="3" width="5" height="18" fill="currentColor"/><rect x="14" y="3" width="5" height="18" fill="currentColor"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="14" height="14"><polygon points="6,3 20,12 6,21" fill="currentColor"/></svg>';
+    presentBtn.title = _presentMode ? '退出演讲 (Esc)' : '演讲模式 (Ctrl+Shift+P)';
+  }
+  document.getElementById('main-canvas').style.cursor = _presentMode ? 'none' : '';
+  if (_presentMode && _scenes.length > 0 && _currentScene < 0) {
+    goToScene(0);
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (!_presentMode) return;
+  if (e.key === 'Escape') { togglePresentMode(); e.preventDefault(); return; }
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { nextScene(); e.preventDefault(); }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { prevScene(); e.preventDefault(); }
+});
+
+document.addEventListener('click', (e) => {
+  if (!_presentMode) return;
+  if (e.target.id === 'main-canvas') nextScene();
+});
 
 /* ================================================================
  *  示例元素（首次加载时添加）

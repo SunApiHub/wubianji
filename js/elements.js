@@ -184,6 +184,9 @@ const Elements = {
       case 'text':
         return wx >= b.minX && wx <= b.maxX && wy >= b.minY && wy <= b.maxY;
 
+      case 'table':
+        return wx >= b.minX && wx <= b.maxX && wy >= b.minY && wy <= b.maxY;
+
       default:
         return wx >= b.minX - sw && wx <= b.maxX + sw &&
                wy >= b.minY - sw && wy <= b.maxY + sw;

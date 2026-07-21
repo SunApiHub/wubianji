@@ -151,6 +151,14 @@ const UI = {
 
   /** 专门处理文本元素颜色（用 strokeColor 作为文字颜色） */
   _applyTextColorToSelected(color, { recordHistory = true } = {}) {
+    const editingCell = Tools._tools.text?._editingCell;
+    if (editingCell?.textEl) {
+      editingCell.textEl.fillColor = color;
+      const textarea = document.getElementById('text-editor');
+      if (textarea) textarea.style.color = color;
+      Renderer.markDirty();
+      return;
+    }
     const commands = [];
     for (const id of Renderer.selectedIds) {
       const el = Elements.get(id);
@@ -360,11 +368,23 @@ const UI = {
   },
 
   _applyAlignToSelected(align) {
+    const editingCell = Tools._tools.text?._editingCell;
+    if (editingCell?.textEl) {
+      editingCell.textEl.textAlign = align;
+      const textarea = document.getElementById('text-editor');
+      if (textarea) textarea.style.textAlign = align;
+      Renderer.markDirty();
+      return;
+    }
     const commands = [];
     for (const id of Renderer.selectedIds) {
       const el = Elements.get(id);
       if (!el) continue;
-      if (el.type !== 'text' && el.type !== 'sticky-note') continue;
+      if (el.type !== 'text' && el.type !== 'sticky-note') {
+        // 表格：如果有选中的单元格，应用对齐到表格
+        if (el.type === 'table') continue; // 表格本身跳过
+        continue;
+      }
       const oldStyle = { textAlign: el.textAlign || 'left' };
       if (oldStyle.textAlign === align) continue;
       el.textAlign = align;
@@ -378,6 +398,14 @@ const UI = {
 
   /** 将字号应用到选中文本元素 */
   _applyFontSizeToSelected(size, { recordHistory = true } = {}) {
+    const editingCell = Tools._tools.text?._editingCell;
+    if (editingCell?.textEl) {
+      editingCell.textEl.fontSize = size;
+      const textarea = document.getElementById('text-editor');
+      if (textarea) textarea.style.fontSize = Math.max(12, size * Camera.zoom) + 'px';
+      Renderer.markDirty();
+      return;
+    }
     const commands = [];
     for (const id of Renderer.selectedIds) {
       const el = Elements.get(id);
@@ -475,7 +503,7 @@ const UI = {
         const keyMap = {
           'v': 'select', 'h': 'hand', 'p': 'pen',
           'r': 'rectangle', 'o': 'ellipse', 'l': 'line',
-          'a': 'arrow', 't': 'text', 'n': 'sticky-note', 'e': 'eraser', 'i': 'image'
+          'a': 'arrow', 't': 'text', 'n': 'sticky-note', 'e': 'eraser', 'i': 'image', 'b': 'table'
         };
         if (keyMap[e.key.toLowerCase()] && !e.target.closest('input, textarea')) {
           const tool = keyMap[e.key.toLowerCase()];
@@ -512,6 +540,21 @@ const UI = {
       // 保存 (Ctrl+S)
       if (ctrl && e.key === 's') {
         SaveManager.saveToFile();
+        e.preventDefault();
+      }
+
+      // 场景快捷键
+      if (ctrl && e.shiftKey && e.key === 'S') {
+        const name = prompt('场景名称:', '场景 ' + (_scenes.length + 1));
+        if (name !== null) saveScene(name || undefined);
+        e.preventDefault();
+      }
+      if (ctrl && e.key === '[') { prevScene(); e.preventDefault(); }
+      if (ctrl && e.key === ']') { nextScene(); e.preventDefault(); }
+
+      // 演讲模式 Ctrl+Shift+P
+      if (ctrl && e.shiftKey && e.key === 'P') {
+        togglePresentMode();
         e.preventDefault();
       }
 
