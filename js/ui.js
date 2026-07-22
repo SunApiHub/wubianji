@@ -16,10 +16,8 @@ const UI = {
     this._initTheme();
     this._initToolButtons();
     this._initColorPickers();
-    this._initPresetColors();
     this._initStrokeWidth();
     this._initFontSize();
-    this._initAlphaSliders();
     this._initTextAlign();
     this._initUndoRedo();
     this._initExport();
@@ -87,37 +85,185 @@ const UI = {
 
   /* ---------- 颜色选择器 ---------- */
   _initColorPickers() {
-    const fillInput = document.getElementById('input-fill-color');
-    const strokeInput = document.getElementById('input-stroke-color');
-    const fillSwatch = document.getElementById('fill-color-swatch');
-    const strokeSwatch = document.getElementById('stroke-color-swatch');
+    const fillBtn = document.getElementById('btn-fill-color');
+    const strokeBtn = document.getElementById('btn-stroke-color');
+    const fillPopup = document.getElementById('fill-color-popup');
+    const strokePopup = document.getElementById('stroke-color-popup');
 
-    fillInput.addEventListener('input', () => {
-      const color = fillInput.value;
-      appState.fillColor = color;
-      fillSwatch.setAttribute('fill', color);
-      this._updatePresetActive('fill', color);
-      this._applyStyleToSelected({ fillColor: color }, { recordHistory: false });
+    // 初始化两个弹窗的选色器
+    this._initPopupPicker('fill');
+    this._initPopupPicker('stroke');
+
+    // 点击色块按钮打开弹窗（定位到按钮下方）
+    fillBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._toggleColorPopup('fill', fillBtn);
     });
-    fillInput.addEventListener('change', () => {
-      this._applyColorWithAlpha('fill');
+    strokeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this._toggleColorPopup('stroke', strokeBtn);
     });
 
-    strokeInput.addEventListener('input', () => {
-      const color = strokeInput.value;
-      appState.strokeColor = color;
-      strokeSwatch.setAttribute('stroke', color);
-      this._updatePresetActive('stroke', color);
-      this._applyStyleToSelected({ strokeColor: color }, { recordHistory: false });
-      this._applyTextColorToSelected(color, { recordHistory: false });
-    });
-    strokeInput.addEventListener('change', () => {
-      this._applyColorWithAlpha('stroke');
+    // 点击外部关闭弹窗
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.color-popup') && !e.target.closest('.style-btn')) {
+        fillPopup.classList.remove('open');
+        strokePopup.classList.remove('open');
+      }
     });
 
     // 初始颜色
-    fillSwatch.setAttribute('fill', appState.fillColor);
-    strokeSwatch.setAttribute('stroke', appState.strokeColor);
+    this._syncSwatch('fill');
+    this._syncSwatch('stroke');
+  },
+
+  _toggleColorPopup(type, anchorBtn) {
+    const fillPopup = document.getElementById('fill-color-popup');
+    const strokePopup = document.getElementById('stroke-color-popup');
+    const popup = type === 'fill' ? fillPopup : strokePopup;
+    const other = type === 'fill' ? strokePopup : fillPopup;
+
+    const willOpen = !popup.classList.contains('open');
+    other.classList.remove('open');
+    popup.classList.toggle('open', willOpen);
+
+    if (willOpen && anchorBtn) {
+      // 定位到按钮正下方
+      const rect = anchorBtn.getBoundingClientRect();
+      const popupWidth = 200;
+      let left = rect.left + rect.width / 2 - popupWidth / 2;
+      // 防止超出屏幕
+      left = Math.max(8, Math.min(left, window.innerWidth - popupWidth - 8));
+      popup.style.left = left + 'px';
+      popup.style.top = (rect.bottom + 8) + 'px';
+      // 箭头对准按钮中心
+      const arrow = popup.querySelector('.color-popup-arrow');
+      const arrowLeft = rect.left + rect.width / 2 - left;
+      arrow.style.left = Math.max(12, Math.min(arrowLeft, popupWidth - 12)) + 'px';
+      // 同步滑块到当前颜色
+      this._syncPopupFromState(type);
+    }
+  },
+
+  _initPopupPicker(type) {
+    const hue = document.getElementById(type + '-hue');
+    const sat = document.getElementById(type + '-sat');
+    const light = document.getElementById(type + '-light');
+    const alpha = document.getElementById('input-' + type + '-alpha');
+    const preview = document.getElementById(type + '-color-preview');
+
+    const apply = () => {
+      const h = parseInt(hue.value);
+      const s = parseInt(sat.value);
+      const l = parseInt(light.value);
+      const hex = this._hslToHex(h, s, l);
+      this._setColor(type, hex);
+      // 更新饱和度/亮度滑块的背景
+      this._updateSliderGradients(type, h, s, l);
+    };
+
+    hue.addEventListener('input', apply);
+    sat.addEventListener('input', apply);
+    light.addEventListener('input', apply);
+    alpha.addEventListener('input', () => {
+      if (type === 'fill') appState.fillAlpha = parseInt(alpha.value) / 100;
+      else appState.strokeAlpha = parseInt(alpha.value) / 100;
+      this._applyColorWithAlpha(type);
+    });
+
+    // 预设颜色
+    const presetContainer = document.getElementById(type + '-preset-colors');
+    this.PRESET_COLORS.forEach(color => {
+      const dot = document.createElement('div');
+      dot.className = 'preset-color';
+      dot.style.backgroundColor = color;
+      dot.title = color;
+      dot.addEventListener('click', () => {
+        this._setColor(type, color);
+        // 同步滑块
+        const hsl = this._hexToHsl(color);
+        hue.value = hsl.h;
+        sat.value = hsl.s;
+        light.value = hsl.l;
+        this._updateSliderGradients(type, hsl.h, hsl.s, hsl.l);
+      });
+      presetContainer.appendChild(dot);
+    });
+  },
+
+  _setColor(type, hex) {
+    if (type === 'fill') {
+      appState.fillColor = hex;
+    } else {
+      appState.strokeColor = hex;
+    }
+    this._syncSwatch(type);
+    this._applyColorWithAlpha(type);
+  },
+
+  _syncSwatch(type) {
+    const color = type === 'fill' ? appState.fillColor : appState.strokeColor;
+    const preview = document.getElementById(type + '-color-preview');
+    if (preview) preview.style.backgroundColor = color;
+    if (type === 'fill') {
+      document.getElementById('fill-color-swatch').setAttribute('fill', color);
+    } else {
+      document.getElementById('stroke-color-swatch').setAttribute('stroke', color);
+    }
+  },
+
+  _syncPopupFromState(type) {
+    const color = type === 'fill' ? appState.fillColor : appState.strokeColor;
+    const alpha = type === 'fill' ? (appState.fillAlpha ?? 1) : (appState.strokeAlpha ?? 1);
+    const hsl = this._hexToHsl(color);
+    document.getElementById(type + '-hue').value = hsl.h;
+    document.getElementById(type + '-sat').value = hsl.s;
+    document.getElementById(type + '-light').value = hsl.l;
+    const alphaSlider = document.getElementById('input-' + type + '-alpha');
+    alphaSlider.value = Math.round(alpha * 100);
+    this._updateSliderGradients(type, hsl.h, hsl.s, hsl.l);
+    this._syncSwatch(type);
+  },
+
+  _updateSliderGradients(type, h, s, l) {
+    const sat = document.getElementById(type + '-sat');
+    const light = document.getElementById(type + '-light');
+    const alpha = document.getElementById('input-' + type + '-alpha');
+    // 饱和度滑块：从灰色到当前色相的纯色
+    sat.style.background = `linear-gradient(to right, ${this._hslToHex(h, 0, l)}, ${this._hslToHex(h, 100, l)})`;
+    // 亮度滑块：从黑到当前色相纯色再到白
+    light.style.background = `linear-gradient(to right, #000, ${this._hslToHex(h, s, 50)}, #fff)`;
+    // 透明度滑块：从透明到当前颜色
+    alpha.style.background = `linear-gradient(to right, transparent, ${this._hslToHex(h, s, l)})`;
+  },
+
+  _hslToHex(h, s, l) {
+    s /= 100;
+    l /= 100;
+    const k = n => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    const toHex = x => Math.round(255 * x).toString(16).padStart(2, '0');
+    return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`;
+  },
+
+  _hexToHsl(hex) {
+    const r = parseInt(hex.slice(1, 3), 16) / 255;
+    const g = parseInt(hex.slice(3, 5), 16) / 255;
+    const b = parseInt(hex.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)) * 60; break;
+        case g: h = ((b - r) / d + 2) * 60; break;
+        case b: h = ((r - g) / d + 4) * 60; break;
+      }
+    }
+    return { h: Math.round(h), s: Math.round(s * 100), l: Math.round(l * 100) };
   },
 
   /** 将样式应用到所有选中元素 */
@@ -174,55 +320,6 @@ const UI = {
       History.execute(new BatchCommand(commands));
     }
     Renderer.markDirty();
-  },
-
-  /* ---------- 预设颜色 ---------- */
-  _initPresetColors() {
-    const container = document.getElementById('preset-colors');
-    this.PRESET_COLORS.forEach(color => {
-      const dot = document.createElement('div');
-      dot.className = 'preset-color';
-      dot.style.backgroundColor = color;
-      if (color === '#000000') dot.classList.add('active'); // 默认描边色选中
-      dot.title = color + '\n单击=描边/文字色  双击=填充色';
-
-      dot.addEventListener('click', () => {
-        appState.strokeColor = color;
-        document.getElementById('input-stroke-color').value = color;
-        document.getElementById('stroke-color-swatch').setAttribute('stroke', color);
-        this._updatePresetActive('stroke', color);
-        this._applyColorWithAlpha('stroke');
-      });
-
-      dot.addEventListener('dblclick', () => {
-        appState.fillColor = color;
-        document.getElementById('input-fill-color').value = color;
-        document.getElementById('fill-color-swatch').setAttribute('fill', color);
-        this._updatePresetActive('fill', color);
-        this._applyColorWithAlpha('fill');
-      });
-
-      dot.addEventListener('dblclick', () => {
-        appState.fillColor = color;
-        document.getElementById('input-fill-color').value = color;
-        document.getElementById('fill-color-swatch').setAttribute('fill', color);
-        this._updatePresetActive('fill', color);
-      });
-
-      container.appendChild(dot);
-    });
-  },
-
-  _updatePresetActive(type, color) {
-    // 只更新没有特定类型区分的视觉反馈
-    const dots = document.querySelectorAll('.preset-color');
-    dots.forEach(d => {
-      if (d.style.backgroundColor === color) {
-        d.classList.add('active');
-      } else {
-        // 不完全移除，因为可能两个颜色相同
-      }
-    });
   },
 
   /* ---------- 线条粗细 ---------- */
@@ -305,25 +402,6 @@ const UI = {
 
     slider.value = appState.fontSize;
     valDisplay.textContent = appState.fontSize;
-  },
-
-  /* ---------- 透明度（填充/线条独立） ---------- */
-  _initAlphaSliders() {
-    const fillAlpha = document.getElementById('input-fill-alpha');
-    const strokeAlpha = document.getElementById('input-stroke-alpha');
-    if (!fillAlpha || !strokeAlpha) return;
-
-    fillAlpha.addEventListener('input', () => {
-      appState.fillAlpha = parseInt(fillAlpha.value) / 100;
-      this._applyColorWithAlpha('fill');
-    });
-    strokeAlpha.addEventListener('input', () => {
-      appState.strokeAlpha = parseInt(strokeAlpha.value) / 100;
-      this._applyColorWithAlpha('stroke');
-    });
-
-    fillAlpha.value = (appState.fillAlpha || 1) * 100;
-    strokeAlpha.value = (appState.strokeAlpha || 1) * 100;
   },
 
   /** 用 hex + alpha 合成 rgba 并应用到选中元素 */
@@ -451,25 +529,21 @@ const UI = {
 
   /* ---------- 保存/加载 ---------- */
   _initSaveLoad() {
-    // 保存到文件
-    document.getElementById('btn-save').addEventListener('click', () => {
-      SaveManager.saveToFile();
-    });
-
-    // 从文件加载
-    document.getElementById('btn-load').addEventListener('click', () => {
-      document.getElementById('input-load-file').click();
-    });
-    document.getElementById('input-load-file').addEventListener('change', (e) => {
-      if (e.target.files && e.target.files[0]) {
-        if (Elements.list.length > 0 && !confirm('加载文件将替换当前画布内容，确定继续？')) {
+    // 保存/加载已移至场景管理面板的文件操作下拉菜单
+    // 从文件加载（工具栏隐藏 input）
+    const inputLoad = document.getElementById('input-load-file');
+    if (inputLoad) {
+      inputLoad.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          if (Elements.list.length > 0 && !confirm('加载文件将替换当前画布内容，确定继续？')) {
+            e.target.value = '';
+            return;
+          }
+          SaveManager.loadFromFile(e.target.files[0]);
           e.target.value = '';
-          return;
         }
-        SaveManager.loadFromFile(e.target.files[0]);
-        e.target.value = '';
-      }
-    });
+      });
+    }
   },
 
   /* ---------- 清空 ---------- */
@@ -603,12 +677,11 @@ const UI = {
       // Delete / Backspace 删除选中
       if ((e.key === 'Delete' || e.key === 'Backspace') && Renderer.selectedIds.length > 0) {
         const toDelete = Renderer.selectedIds.map(id => Elements.get(id)).filter(Boolean);
-        const indexed = toDelete.map(el => ({ el, index: Elements.list.indexOf(el) }));
-        for (const { el } of indexed) {
+        for (const el of toDelete) {
           const idx = Elements.list.indexOf(el);
           if (idx !== -1) Elements.list.splice(idx, 1);
         }
-        History.execute(new DeleteElementsCommand(indexed));
+        History.execute(new DeleteElementsCommand(toDelete));
         Renderer.selectedIds = [];
         Renderer.markDirty();
         this.updateStatus();

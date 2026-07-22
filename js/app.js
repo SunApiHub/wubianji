@@ -17,6 +17,11 @@ let _scenes = [];
 let _currentScene = -1;
 let _presentMode = false;
 
+/** 场景管理面板状态 */
+let _scenePanelOpen = false;
+let _scenePanelSelected = new Set(); // 选中的场景索引
+let _scenePanelDragIdx = -1;        // 正在拖拽的场景索引
+
 /** 当历史状态改变时的回调 */
 function onHistoryChange() {
   UI._updateUndoRedoButtons();
@@ -1097,6 +1102,8 @@ function refreshSceneUI() {
     const idx = Math.max(0, _currentScene);
     label.textContent = (idx + 1) + '/' + _scenes.length + ' ' + _scenes[idx].name;
   }
+  // 面板打开时同步刷新
+  if (_scenePanelOpen) renderScenePanel();
 }
 
 /** 初始化场景 UI */
@@ -1108,21 +1115,317 @@ function initSceneUI() {
     const name = prompt('场景名称:', '场景 ' + (_scenes.length + 1));
     if (name !== null) saveScene(name || undefined);
   });
-  // 双击标签重命名当前场景
-  document.getElementById('scene-label').addEventListener('dblclick', () => {
-    if (_scenes.length === 0 || _currentScene < 0) return;
-    const name = prompt('重命名:', _scenes[_currentScene].name);
-    if (name !== null && name.trim()) renameScene(_currentScene, name.trim());
-  });
-  // 右键标签删除场景
-  document.getElementById('scene-label').addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    if (_scenes.length === 0 || _currentScene < 0) return;
-    if (confirm('删除场景「' + _scenes[_currentScene].name + '」？')) {
-      deleteScene(_currentScene);
-    }
+  // 单击标签打开场景管理面板
+  document.getElementById('scene-label').addEventListener('click', () => {
+    toggleScenePanel();
   });
   refreshSceneUI();
+  initScenePanel();
+}
+
+/* ================================================================
+ *  场景管理面板
+ * ================================================================ */
+function toggleScenePanel() {
+  _scenePanelOpen = !_scenePanelOpen;
+  const panel = document.getElementById('scene-panel');
+  if (!panel) return;
+  if (_scenePanelOpen) {
+    _scenePanelSelected.clear();
+    panel.style.display = 'flex';
+    renderScenePanel();
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+function closeScenePanel() {
+  _scenePanelOpen = false;
+  const panel = document.getElementById('scene-panel');
+  if (panel) panel.style.display = 'none';
+}
+
+function initScenePanel() {
+  // 关闭按钮
+  document.getElementById('scene-panel-close').addEventListener('click', closeScenePanel);
+
+  // 全选按钮
+  document.getElementById('scene-panel-select-all').addEventListener('click', () => {
+    if (_scenePanelSelected.size === _scenes.length) {
+      _scenePanelSelected.clear();
+    } else {
+      for (let i = 0; i < _scenes.length; i++) _scenePanelSelected.add(i);
+    }
+    renderScenePanel();
+  });
+
+  // 删除选中按钮
+  document.getElementById('scene-panel-delete').addEventListener('click', () => {
+    if (_scenePanelSelected.size === 0) return;
+    const count = _scenePanelSelected.size;
+    if (!confirm('确定删除选中的 ' + count + ' 个场景？')) return;
+    deleteSelectedScenes();
+  });
+
+  // 添加场景按钮
+  document.getElementById('scene-panel-add').addEventListener('click', () => {
+    const name = prompt('场景名称:', '场景 ' + (_scenes.length + 1));
+    if (name !== null) saveScene(name || undefined);
+  });
+
+  // 跳转到指定场景
+  const jumpInput = document.getElementById('scene-jump-input');
+  const jumpBtn = document.getElementById('scene-jump-btn');
+  const doJump = () => {
+    const val = parseInt(jumpInput.value);
+    if (isNaN(val) || val < 1 || val > _scenes.length) {
+      jumpInput.style.borderColor = 'var(--danger)';
+      setTimeout(() => { jumpInput.style.borderColor = ''; }, 800);
+      return;
+    }
+    goToScene(val - 1);
+    jumpInput.value = '';
+    renderScenePanel();
+  };
+  jumpBtn.addEventListener('click', doJump);
+  jumpInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doJump();
+  });
+
+  // 点击面板外部关闭
+  document.addEventListener('mousedown', (e) => {
+    if (!_scenePanelOpen) return;
+    const panel = document.getElementById('scene-panel');
+    const sceneBar = document.getElementById('scene-bar');
+    if (panel && !panel.contains(e.target) && !sceneBar.contains(e.target)) {
+      closeScenePanel();
+    }
+  });
+
+  // Esc 关闭面板
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && _scenePanelOpen) {
+      closeScenePanel();
+      e.preventDefault();
+    }
+  });
+
+  // 文件操作下拉菜单
+  const fileBtn = document.getElementById('scene-panel-file-btn');
+  const fileDropdown = document.getElementById('scene-panel-file-dropdown');
+  if (fileBtn && fileDropdown) {
+    fileBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      fileDropdown.style.display = fileDropdown.style.display === 'none' ? 'block' : 'none';
+    });
+    // 点击外部关闭下拉菜单
+    document.addEventListener('click', (e) => {
+      if (!fileBtn.contains(e.target) && !fileDropdown.contains(e.target)) {
+        fileDropdown.style.display = 'none';
+      }
+    });
+    // 菜单项点击
+    fileDropdown.querySelectorAll('.scene-panel-file-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const action = item.dataset.action;
+        fileDropdown.style.display = 'none';
+        if (action === 'save') {
+          SaveManager.saveToFile();
+        } else if (action === 'load') {
+          const input = document.getElementById('input-load-file');
+          if (input) input.click();
+        }
+      });
+    });
+  }
+}
+
+function renderScenePanel() {
+  const list = document.getElementById('scene-panel-list');
+  if (!list) return;
+
+  if (_scenes.length === 0) {
+    list.innerHTML = '<div class="scene-panel-empty">暂无场景<br><br>点击底部按钮或按<br>Ctrl+Shift+S 添加场景</div>';
+    return;
+  }
+
+  list.innerHTML = '';
+  for (let i = 0; i < _scenes.length; i++) {
+    const scene = _scenes[i];
+    const item = document.createElement('div');
+    item.className = 'scene-item';
+    if (i === _currentScene) item.classList.add('current');
+    if (_scenePanelSelected.has(i)) item.classList.add('selected');
+    item.dataset.index = i;
+    item.draggable = true;
+
+    item.innerHTML =
+      '<span class="scene-item-grip" title="拖拽排序">⠿</span>' +
+      '<span class="scene-item-check">✓</span>' +
+      '<div class="scene-item-info">' +
+        '<div class="scene-item-name">' + escapeHtml(scene.name) + '</div>' +
+        '<div class="scene-item-index">第 ' + (i + 1) + ' 页</div>' +
+      '</div>' +
+      '<span class="scene-item-dot"></span>';
+
+    // 单击：选中/取消选中（多选）
+    item.addEventListener('click', (e) => {
+      if (e.target.classList.contains('scene-item-grip')) return; // 拖拽手柄不触发
+      const idx = parseInt(item.dataset.index);
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl+Click: 多选切换
+        if (_scenePanelSelected.has(idx)) _scenePanelSelected.delete(idx);
+        else _scenePanelSelected.add(idx);
+      } else if (e.shiftKey && _scenePanelSelected.size > 0) {
+        // Shift+Click: 范围选中
+        const lastSelected = Math.max(..._scenePanelSelected);
+        const from = Math.min(lastSelected, idx);
+        const to = Math.max(lastSelected, idx);
+        for (let j = from; j <= to; j++) _scenePanelSelected.add(j);
+      } else {
+        // 普通点击：跳转场景并清除多选
+        _scenePanelSelected.clear();
+        goToScene(idx);
+      }
+      renderScenePanel();
+    });
+
+    // 双击：重命名
+    item.addEventListener('dblclick', (e) => {
+      if (e.target.classList.contains('scene-item-grip')) return;
+      const idx = parseInt(item.dataset.index);
+      const name = prompt('重命名场景:', _scenes[idx].name);
+      if (name !== null && name.trim()) renameScene(idx, name.trim());
+      renderScenePanel();
+    });
+
+    // 右键：删除
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const idx = parseInt(item.dataset.index);
+      if (confirm('删除场景「' + _scenes[idx].name + '」？')) {
+        deleteScene(idx);
+        _scenePanelSelected.delete(idx);
+        // 调整其他选中索引
+        const newSelected = new Set();
+        for (const si of _scenePanelSelected) {
+          newSelected.add(si > idx ? si - 1 : si);
+        }
+        _scenePanelSelected = newSelected;
+        renderScenePanel();
+      }
+    });
+
+    // --- 拖拽排序 ---
+    item.addEventListener('dragstart', (e) => {
+      _scenePanelDragIdx = parseInt(item.dataset.index);
+      item.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(_scenePanelDragIdx));
+    });
+
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      _scenePanelDragIdx = -1;
+      // 清除所有拖拽状态样式
+      list.querySelectorAll('.scene-item').forEach(el => {
+        el.classList.remove('drag-over', 'drag-over-below');
+      });
+    });
+
+    item.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const targetIdx = parseInt(item.dataset.index);
+      if (targetIdx === _scenePanelDragIdx) return;
+      // 判断插入位置
+      const rect = item.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      item.classList.remove('drag-over', 'drag-over-below');
+      if (e.clientY < midY) {
+        item.classList.add('drag-over');
+      } else {
+        item.classList.add('drag-over-below');
+      }
+    });
+
+    item.addEventListener('dragleave', () => {
+      item.classList.remove('drag-over', 'drag-over-below');
+    });
+
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const fromIdx = _scenePanelDragIdx;
+      const targetIdx = parseInt(item.dataset.index);
+      if (fromIdx < 0 || fromIdx === targetIdx) return;
+
+      // 判断插入方向
+      const rect = item.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      const insertAfter = e.clientY >= midY;
+
+      reorderScene(fromIdx, targetIdx, insertAfter);
+
+      item.classList.remove('drag-over', 'drag-over-below');
+      // 更新选中索引
+      _scenePanelSelected.clear();
+      renderScenePanel();
+    });
+
+    list.appendChild(item);
+  }
+}
+
+/** 重新排序场景 */
+function reorderScene(fromIdx, toIdx, insertAfter) {
+  if (fromIdx < 0 || fromIdx >= _scenes.length) return;
+  if (toIdx < 0 || toIdx >= _scenes.length) return;
+
+  const scene = _scenes.splice(fromIdx, 1)[0];
+
+  // 计算实际插入位置
+  let insertIdx = toIdx;
+  if (fromIdx < toIdx) insertIdx--; // 因为已移除前面的元素
+  if (insertAfter) insertIdx++;
+
+  insertIdx = Math.max(0, Math.min(insertIdx, _scenes.length));
+  _scenes.splice(insertIdx, 0, scene);
+
+  // 更新当前场景索引
+  if (_currentScene === fromIdx) {
+    _currentScene = insertIdx;
+  } else if (fromIdx < _currentScene && insertIdx >= _currentScene) {
+    _currentScene--;
+  } else if (fromIdx > _currentScene && insertIdx <= _currentScene) {
+    _currentScene++;
+  }
+
+  refreshSceneUI();
+  SaveManager.saveToLocal();
+}
+
+/** 删除选中的场景 */
+function deleteSelectedScenes() {
+  if (_scenePanelSelected.size === 0) return;
+  const indices = Array.from(_scenePanelSelected).sort((a, b) => b - a); // 从大到小删除
+  for (const idx of indices) {
+    if (idx >= 0 && idx < _scenes.length) {
+      _scenes.splice(idx, 1);
+    }
+  }
+  // 更新当前场景索引
+  if (_currentScene >= _scenes.length) _currentScene = _scenes.length - 1;
+  _scenePanelSelected.clear();
+  refreshSceneUI();
+  renderScenePanel();
+  SaveManager.saveToLocal();
+}
+
+/** HTML 转义 */
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
 /* ================================================================
@@ -1134,6 +1437,8 @@ function togglePresentMode() {
     const el = document.getElementById(id);
     if (el) el.style.display = _presentMode ? 'none' : '';
   });
+  // 演讲模式隐藏场景管理面板
+  if (_presentMode) closeScenePanel();
   // 场景栏保留播放按钮
   const sceneBar = document.getElementById('scene-bar');
   const presentBtn = document.getElementById('btn-present-mode');

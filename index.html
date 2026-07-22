@@ -12,128 +12,173 @@
 
   <!-- 顶部工具栏 -->
   <div id="toolbar">
-    <div class="tool-group" id="tool-buttons">
-      <button class="tool-btn active" data-tool="select" title="选择 (V)">
-        <svg viewBox="0 0 24 24"><path d="M4 4l5 16 2-5 5-2z" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round"/><path d="M13 11l5 5" stroke="currentColor" stroke-width="2" fill="none"/></svg>
-      </button>
-      <button class="tool-btn" data-tool="hand" title="抓手 (H)">
-        <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v3.5H6a3 3 0 0 0-3 3c0 .77.3 1.47.78 2H3a3 3 0 0 0-1 5.83V20a3 3 0 0 0 3 3h6.5a6 6 0 0 0 4.69-2.1L20 16.5a3 3 0 0 0 .5-3.5l-3-5A3 3 0 0 0 15 6.5H12V5a3 3 0 0 0-3-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
+    <!-- 第一行：工具 -->
+    <div class="toolbar-row">
+      <div class="tool-group" id="tool-buttons">
+        <button class="tool-btn active" data-tool="select" title="选择 (V)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 8-6.5 1.5L9 19z"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="hand" title="抓手 (H)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 11V6a2 2 0 0 0-4 0v1M14 7V4a2 2 0 0 0-4 0v3M10 7V5a2 2 0 0 0-4 0v6"/><path d="M18 11a2 2 0 0 1 4 0v3a8 8 0 0 1-8 8h-2c-2.5 0-4.5-1-6.2-2.8L3 16.5a2 2 0 0 1 2.8-2.8L6 14V5"/></svg>
+        </button>
+        <span class="tool-sep"></span>
+        <button class="tool-btn" data-tool="pen" title="画笔 (P)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="rectangle" title="矩形 (R)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="ellipse" title="椭圆 (O)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="line" title="直线 (L)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 19L19 5"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="arrow" title="箭头 (A)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19L19 5M12 5h7v7"/></svg>
+        </button>
+        <span class="tool-sep"></span>
+        <button class="tool-btn" data-tool="text" title="文本 (T)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12M12 4v16M8 20h8"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="sticky-note" title="便签 (N)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="eraser" title="橡皮擦 (E)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21h13"/><path d="M5.5 13.5L13 6l5 5-7.5 7.5a2.12 2.12 0 0 1-3 0L5.5 16.5a2.12 2.12 0 0 1 0-3Z"/></svg>
+        </button>
+        <span class="tool-sep"></span>
+        <button class="tool-btn" data-tool="image" title="插入图片 (I)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-3.5-3.5a2 2 0 0 0-3 0L5 21"/></svg>
+        </button>
+        <button class="tool-btn" data-tool="table" title="插入表格 (B)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+        </button>
+        <input type="file" id="input-image-file" accept="image/*" style="display:none">
+      </div>
+
       <span class="tool-sep"></span>
-      <button class="tool-btn" data-tool="pen" title="画笔 (P)">
-        <svg viewBox="0 0 24 24"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 5l4 4" stroke="currentColor" stroke-width="1.8"/></svg>
-      </button>
-      <button class="tool-btn" data-tool="rectangle" title="矩形 (R)">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
-      </button>
-      <button class="tool-btn" data-tool="ellipse" title="椭圆 (O)">
-        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="10" ry="10" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>
-      </button>
-      <button class="tool-btn" data-tool="line" title="直线 (L)">
-        <svg viewBox="0 0 24 24"><line x1="4" y1="20" x2="20" y2="4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-      </button>
-      <button class="tool-btn" data-tool="arrow" title="箭头 (A)">
-        <svg viewBox="0 0 24 24"><line x1="5" y1="19" x2="19" y2="5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><polyline points="13 5 19 5 19 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <span class="tool-sep"></span>
-      <button class="tool-btn" data-tool="text" title="文本 (T)">
-        <svg viewBox="0 0 24 24"><text x="4" y="19" font-size="20" font-weight="bold" fill="currentColor" font-family="system-ui">T</text></svg>
-      </button>
-      <button class="tool-btn" data-tool="sticky-note" title="便签 (N)">
-        <svg viewBox="0 0 24 24"><path d="M4 4h16v12l-4 4H4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M16 16v4" stroke="currentColor" stroke-width="1.8"/></svg>
-      </button>
-      <button class="tool-btn" data-tool="eraser" title="橡皮擦 (E)">
-        <svg viewBox="0 0 24 24"><path d="M20 20H9L2 13l8-8 11 11z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><line x1="6" y1="13" x2="9" y2="16" stroke="currentColor" stroke-width="1.8"/></svg>
-      </button>
-      <span class="tool-sep"></span>
-      <button class="tool-btn" data-tool="image" title="插入图片 (I)">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><polyline points="21 15 16 10 5 21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button class="tool-btn" data-tool="table" title="插入表格 (B)">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" stroke-width="1.8"/><line x1="3" y1="15" x2="21" y2="15" stroke="currentColor" stroke-width="1.8"/><line x1="9" y1="3" x2="9" y2="21" stroke="currentColor" stroke-width="1.8"/><line x1="15" y1="3" x2="15" y2="21" stroke="currentColor" stroke-width="1.8"/></svg>
-      </button>
-      <input type="file" id="input-image-file" accept="image/*" style="display:none">
+
+      <!-- 撤销/重做 + 操作 -->
+      <div class="tool-group">
+        <button id="btn-undo" class="tool-btn" title="撤销 (Ctrl+Z)" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9H3"/></svg>
+        </button>
+        <button id="btn-redo" class="tool-btn" title="重做 (Ctrl+Shift+Z)" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9h9"/></svg>
+        </button>
+        <span class="tool-sep"></span>
+        <input type="file" id="input-load-file" accept=".json" style="display:none">
+        <button id="btn-export" class="tool-btn" title="导出 PNG (Ctrl+E)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none"/><path d="M21 15l-5-5L5 21"/></svg>
+        </button>
+        <button id="btn-theme" class="tool-btn" title="切换明暗主题">
+          <svg id="icon-theme-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <svg id="icon-theme-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <button id="btn-clear" class="tool-btn danger" title="清空画布">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
+      </div>
     </div>
 
-    <span class="tool-sep"></span>
-
-    <!-- 线宽 + 字号放在工具后面 -->
-    <label class="slider-label" title="线条粗细">
-      <svg viewBox="0 0 24 24" width="16" height="16"><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
-      <input type="range" id="input-stroke-width" min="1" max="20" value="2" class="style-slider">
-      <span id="stroke-width-val">2</span>
-    </label>
-    <label class="slider-label" title="字体大小">
-      <svg viewBox="0 0 24 24" width="16" height="16"><text x="3" y="19" font-size="18" font-weight="bold" fill="currentColor" font-family="system-ui">A</text></svg>
-      <input type="range" id="input-font-size" min="10" max="80" value="20" class="style-slider">
-      <span id="font-size-val">20</span>
-    </label>
-
-    <span class="tool-sep"></span>
-
-    <!-- 颜色 + 透明 -->
-    <div class="tool-group" id="style-controls">
-      <div class="color-block">
-        <div class="color-picker-wrapper">
+    <!-- 第二行：样式控制 -->
+    <div class="toolbar-row toolbar-row-secondary">
+      <div class="tool-group" id="style-controls">
+        <div class="color-block">
           <button id="btn-fill-color" class="style-btn" title="填充颜色">
-            <svg viewBox="0 0 24 24" width="18" height="18"><rect x="0" y="0" width="24" height="24" rx="4" id="fill-color-swatch"/></svg>
+            <svg viewBox="0 0 24 24" width="18" height="18"><rect x="3" y="3" width="18" height="18" rx="4" id="fill-color-swatch" stroke="rgba(128,128,128,0.5)" stroke-width="1.5"/></svg>
           </button>
-          <input type="color" id="input-fill-color" value="#ffffff" title="填充颜色">
         </div>
-        <input type="range" id="input-fill-alpha" class="alpha-slider" min="0" max="100" value="100" title="填充透明度">
-      </div>
-      <div class="color-block">
-        <div class="color-picker-wrapper">
-          <button id="btn-stroke-color" class="style-btn" title="线条颜色">
-            <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="5" id="stroke-color-swatch" fill="none" stroke-width="3"/></svg>
+        <div class="color-block">
+          <button id="btn-stroke-color" class="style-btn" title="线条/文字颜色">
+            <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="12" r="7" id="stroke-color-swatch" fill="none" stroke-width="4"/><circle cx="12" cy="12" r="2.5" fill="rgba(128,128,128,0.3)"/></svg>
           </button>
-          <input type="color" id="input-stroke-color" value="#000000" title="线条颜色">
         </div>
-        <input type="range" id="input-stroke-alpha" class="alpha-slider" min="0" max="100" value="100" title="线条透明度">
       </div>
-      <div class="preset-colors" id="preset-colors"></div>
-    </div>
 
-    <span class="tool-sep"></span>
-
-    <div class="tool-group" id="text-align-btns">
-      <button class="tool-btn text-align-btn active" data-align="left" title="左对齐">
-        <svg viewBox="0 0 24 24" width="18" height="18"><line x1="3" y1="5" x2="21" y2="5" stroke="currentColor" stroke-width="2"/><line x1="3" y1="10" x2="15" y2="10" stroke="currentColor" stroke-width="2"/><line x1="3" y1="15" x2="18" y2="15" stroke="currentColor" stroke-width="2"/><line x1="3" y1="20" x2="21" y2="20" stroke="currentColor" stroke-width="2"/></svg>
-      </button>
-      <button class="tool-btn text-align-btn" data-align="center" title="居中">
-        <svg viewBox="0 0 24 24" width="18" height="18"><line x1="3" y1="5" x2="21" y2="5" stroke="currentColor" stroke-width="2"/><line x1="8" y1="10" x2="16" y2="10" stroke="currentColor" stroke-width="2"/><line x1="5" y1="15" x2="19" y2="15" stroke="currentColor" stroke-width="2"/><line x1="3" y1="20" x2="21" y2="20" stroke="currentColor" stroke-width="2"/></svg>
-      </button>
-      <button class="tool-btn text-align-btn" data-align="right" title="右对齐">
-        <svg viewBox="0 0 24 24" width="18" height="18"><line x1="3" y1="5" x2="21" y2="5" stroke="currentColor" stroke-width="2"/><line x1="9" y1="10" x2="21" y2="10" stroke="currentColor" stroke-width="2"/><line x1="6" y1="15" x2="21" y2="15" stroke="currentColor" stroke-width="2"/><line x1="3" y1="20" x2="21" y2="20" stroke="currentColor" stroke-width="2"/></svg>
-      </button>
-    </div>
-
-    <span class="tool-sep"></span>
-    <button id="btn-undo" class="tool-btn" title="撤销 (Ctrl+Z)" disabled>
-        <svg viewBox="0 0 24 24"><path d="M3 7v6h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 17a9 9 0 0 0-9-9H3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button id="btn-redo" class="tool-btn" title="重做 (Ctrl+Shift+Z)" disabled>
-        <svg viewBox="0 0 24 24"><path d="M21 7v6h-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 17a9 9 0 0 1 9-9h9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
       <span class="tool-sep"></span>
-      <button id="btn-save" class="tool-btn" title="保存到文件 (Ctrl+S)">
-        <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="17 21 17 13 7 13 7 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="7 3 7 8 15 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button id="btn-load" class="tool-btn" title="从文件加载">
-        <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="12 11 12 19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="9 16 12 19 15 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <input type="file" id="input-load-file" accept=".json" style="display:none">
+
+      <label class="slider-label" title="线条粗细">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-linecap="round"><path d="M4 20L20 4" stroke-width="1"/><path d="M4 14L14 4" stroke-width="3"/></svg>
+        <input type="range" id="input-stroke-width" min="1" max="20" value="2" class="style-slider">
+        <span id="stroke-width-val">2</span>
+      </label>
+      <label class="slider-label" title="字体大小">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 5h10M10 5v14M7 19h6"/></svg>
+        <input type="range" id="input-font-size" min="10" max="80" value="20" class="style-slider">
+        <span id="font-size-val">20</span>
+      </label>
+
       <span class="tool-sep"></span>
-      <button id="btn-export" class="tool-btn" title="导出 PNG (Ctrl+E)">
-        <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="7 10 12 15 17 10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-      <button id="btn-theme" class="tool-btn" title="切换明暗主题">
-        <svg id="icon-theme-light" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></g></svg>
-        <svg id="icon-theme-dark" viewBox="0 0 24 24" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button id="btn-clear" class="tool-btn danger" title="清空画布">
-        <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
+
+      <div class="tool-group" id="text-align-btns">
+        <button class="tool-btn text-align-btn active" data-align="left" title="左对齐">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h10M4 14h13M4 18h16"/></svg>
+        </button>
+        <button class="tool-btn text-align-btn" data-align="center" title="居中">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 10h10M5.5 14h13M4 18h16"/></svg>
+        </button>
+        <button class="tool-btn text-align-btn" data-align="right" title="右对齐">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M10 10h10M7 14h13M4 18h16"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 颜色弹窗（填充） -->
+  <div id="fill-color-popup" class="color-popup">
+    <div class="color-popup-arrow"></div>
+    <div class="color-popup-body">
+      <div class="color-popup-header">
+        <span class="color-popup-label">填充</span>
+        <div class="color-popup-preview" id="fill-color-preview"></div>
+      </div>
+      <div class="color-popup-presets" id="fill-preset-colors"></div>
+      <div class="color-popup-slider-row">
+        <span class="slider-icon">H</span>
+        <input type="range" id="fill-hue" class="popup-hue-slider" min="0" max="360" value="0">
+      </div>
+      <div class="color-popup-slider-row">
+        <span class="slider-icon">S</span>
+        <input type="range" id="fill-sat" class="popup-sat-slider" min="0" max="100" value="0">
+      </div>
+      <div class="color-popup-slider-row">
+        <span class="slider-icon">B</span>
+        <input type="range" id="fill-light" class="popup-light-slider" min="0" max="100" value="100">
+      </div>
+      <div class="color-popup-slider-row">
+        <span class="slider-icon">A</span>
+        <input type="range" id="input-fill-alpha" class="popup-alpha-slider" min="0" max="100" value="100">
+      </div>
+    </div>
+  </div>
+
+  <!-- 颜色弹窗（描边/文字） -->
+  <div id="stroke-color-popup" class="color-popup">
+    <div class="color-popup-arrow"></div>
+    <div class="color-popup-body">
+      <div class="color-popup-header">
+        <span class="color-popup-label">描边/文字</span>
+        <div class="color-popup-preview" id="stroke-color-preview"></div>
+      </div>
+      <div class="color-popup-presets" id="stroke-preset-colors"></div>
+      <div class="color-popup-slider-row">
+        <span class="slider-icon">H</span>
+        <input type="range" id="stroke-hue" class="popup-hue-slider" min="0" max="360" value="0">
+      </div>
+      <div class="color-popup-slider-row">
+        <span class="slider-icon">S</span>
+        <input type="range" id="stroke-sat" class="popup-sat-slider" min="0" max="100" value="0">
+      </div>
+      <div class="color-popup-slider-row">
+        <span class="slider-icon">B</span>
+        <input type="range" id="stroke-light" class="popup-light-slider" min="0" max="100" value="0">
+      </div>
+      <div class="color-popup-slider-row">
+        <span class="slider-icon">A</span>
+        <input type="range" id="input-stroke-alpha" class="popup-alpha-slider" min="0" max="100" value="100">
+      </div>
     </div>
   </div>
 
@@ -152,9 +197,38 @@
       <svg viewBox="0 0 24 24" width="14" height="14"><polygon points="6,3 20,12 6,21" fill="currentColor"/></svg>
     </button>
     <button id="btn-scene-prev" title="上一个场景 (Ctrl+[)">◀</button>
-    <span id="scene-label">无场景</span>
+    <span id="scene-label" title="点击打开场景管理器">无场景</span>
     <button id="btn-scene-next" title="下一个场景 (Ctrl+])">▶</button>
     <button id="btn-scene-add" title="保存当前视图为场景 (Ctrl+Shift+S)">+</button>
+  </div>
+
+  <!-- 场景管理面板 -->
+  <div id="scene-panel" style="display:none">
+    <div id="scene-panel-header">
+      <span class="scene-panel-title">场景管理</span>
+      <div class="scene-panel-actions">
+        <button id="scene-panel-select-all" title="全选">☑</button>
+        <button id="scene-panel-delete" title="删除选中" class="scene-panel-danger">🗑</button>
+        <button id="scene-panel-close" title="关闭">✕</button>
+      </div>
+    </div>
+    <!-- 跳转到场景 -->
+    <div id="scene-panel-jump">
+      <span class="jump-label">跳转到</span>
+      <input type="number" id="scene-jump-input" min="1" placeholder="页码">
+      <button id="scene-jump-btn" title="跳转">→</button>
+    </div>
+    <div id="scene-panel-list"></div>
+    <div id="scene-panel-footer">
+      <button id="scene-panel-add" title="添加当前视图为场景">+ 添加场景</button>
+      <div class="scene-panel-file-wrapper">
+        <button id="scene-panel-file-btn" class="scene-panel-file-btn" title="文件操作">📁 文件操作 ▾</button>
+        <div id="scene-panel-file-dropdown" class="file-dropdown" style="display:none">
+          <div class="scene-panel-file-item" data-action="save">💾 保存到文件</div>
+          <div class="scene-panel-file-item" data-action="load">📂 从文件加载</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 尺寸面板 -->
