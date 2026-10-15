@@ -564,9 +564,10 @@ const UI = {
   /* ---------- 键盘快捷键 ---------- */
   _initKeyboard() {
     document.addEventListener('keydown', (e) => {
-      // 文本编辑时不处理
-      const textarea = document.getElementById('text-editor');
-      if (textarea.style.display !== 'none' && document.activeElement === textarea) {
+      // 文本编辑或任意输入框聚焦时不处理画布快捷键
+      // （避免搜索框/尺寸/场景跳转等输入框中的 Backspace 误删选中元素）
+      const active = document.activeElement;
+      if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
         return;
       }
 
@@ -635,6 +636,12 @@ const UI = {
       // 复制 Ctrl+C
       if (ctrl && e.key === 'c') {
         copySelected();
+        e.preventDefault();
+      }
+
+      // 文字搜索 Ctrl+F
+      if (ctrl && e.key === 'f') {
+        SearchManager.open();
         e.preventDefault();
       }
 

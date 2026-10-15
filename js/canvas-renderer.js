@@ -18,6 +18,9 @@ const Renderer = {
   guides: [],               // [{ type: 'h'|'v', pos: worldCoord }]
   GUIDE_COLOR: '#ff3b30',   // 红色参考线
 
+  // 搜索高亮
+  searchHighlight: null,    // 当前搜索命中的包围盒（世界坐标）或 null
+
   // 图片缓存
   _imageCache: {},
 
@@ -116,6 +119,11 @@ const Renderer = {
       if (el && !this.selectedIds.includes(this.hoveredId)) {
         this._drawHoverHighlight(ctx, el);
       }
+    }
+
+    // 7. 绘制搜索命中高亮
+    if (this.searchHighlight) {
+      this._drawSearchHighlight(ctx, this.searchHighlight);
     }
 
     ctx.restore();
@@ -618,6 +626,18 @@ const Renderer = {
     ctx.setLineDash([4, 3]);
     ctx.strokeRect(b.x - pad, b.y - pad, b.width + pad * 2, b.height + pad * 2);
     ctx.setLineDash([]);
+  },
+
+  _drawSearchHighlight(ctx, b) {
+    const pad = 6 / Camera.zoom;
+    ctx.save();
+    ctx.strokeStyle = '#ffcc00';
+    ctx.lineWidth = 3 / Camera.zoom;
+    ctx.shadowColor = 'rgba(255, 204, 0, 0.8)';
+    ctx.shadowBlur = 12;
+    ctx.setLineDash([8, 4]);
+    ctx.strokeRect(b.x - pad, b.y - pad, b.width + pad * 2, b.height + pad * 2);
+    ctx.restore();
   },
 
   _drawSelectionBox(ctx) {

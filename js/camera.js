@@ -116,5 +116,16 @@ const Camera = {
     const centerWY = (worldBounds.minY + worldBounds.maxY) / 2;
     this.x = cw / 2 - centerWX * this.zoom;
     this.y = ch / 2 - centerWY * this.zoom;
+  },
+
+  /**
+   * 将指定的世界坐标点居中显示在视口中央（保持当前缩放级别）
+   */
+  centerOn(wx, wy) {
+    const canvas = document.getElementById('main-canvas');
+    const cw = canvas.width / (window.devicePixelRatio || 1);
+    const ch = canvas.height / (window.devicePixelRatio || 1);
+    this.x = cw / 2 - wx * this.zoom;
+    this.y = ch / 2 - wy * this.zoom;
   }
 };

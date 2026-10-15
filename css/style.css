@@ -1035,3 +1035,89 @@ html, body {
     height: 12px;
   }
 }
+
+/* === 文字搜索面板 === */
+#search-panel {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--surface);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+#search-panel .search-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+#search-input {
+  width: 180px;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+
+#search-input::placeholder {
+  color: var(--text-secondary);
+}
+
+#search-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 42px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+#search-panel .search-nav,
+#search-panel .search-close {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+#search-panel .search-nav:hover:not(:disabled),
+#search-panel .search-close:hover {
+  background: var(--active-bg);
+  color: var(--active);
+}
+
+#search-panel .search-nav:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+@media (max-width: 768px) {
+  #search-panel {
+    top: auto;
+    bottom: 12px;
+    right: 12px;
+  }
+  #search-input {
+    width: 120px;
+  }
+}

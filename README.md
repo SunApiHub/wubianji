@@ -38,6 +38,9 @@
 | `Ctrl+Shift+S` | 保存场景 |
 | `Ctrl+[` / `Ctrl+]` | 上/下一个场景 |
 | `Ctrl+Shift+P` | 演讲模式 |
+| `Ctrl+F` | 搜索画布文字（文本/便签/表格） |
+| `Enter` / `Shift+Enter` | 搜索下一个 / 上一个结果 |
+| `Esc` | 关闭搜索 |
 | `Delete` | 删除选中元素 |
 
 ### 右键菜单

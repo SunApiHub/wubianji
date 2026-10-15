@@ -191,6 +191,9 @@ const SaveManager = {
   // 8.5 场景
   initSceneUI();
 
+  // 8.6 文字搜索
+  SearchManager.init();
+
   // 9. 启动渲染循环
   Renderer.startLoop();
 
